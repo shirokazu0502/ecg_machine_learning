@@ -178,9 +178,3 @@ if __name__ == "__main__":
     args.patient_datas_dir=RAW_DATA_DIR+"/patient_data/Af003_KR_3894797"
     args.normal_datas_dir=RAW_DATA_DIR+"/takahashi_test/taniguchi/taniguchi_1107_0"
     main(args)
-  git@github.com: Permission denied (publickey).
-fatal: Could not read from remote repository.
-
-remote: Support for password authentication was removed on August 13, 2021.
-remote: Please see https://docs.github.com/get-started/getting-started-with-git/about-remote-repositories#cloning-with-https-urls for information on currently recommended modes of authentication.
-fatal: Authentication failed for 'https://github.com/shirokazu0502/ecg_machine_learning.git/'
