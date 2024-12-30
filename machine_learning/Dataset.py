@@ -572,6 +572,7 @@ class MyDataset5(TensorDataset):
     def __getitem__(self, idx):
         # print(self.in_data)
         # print(self.in_data.shape)
+        print(self.name, len(self.name), idx)
 
         mul_data = self.in_data[idx]
         ecg_data = self.out_data[idx]

@@ -571,7 +571,7 @@ class MyDataset5(TensorDataset):
 
     def __getitem__(self, idx):
         print(idx)
-        print(self.name)
+        print(self.name, len(self.name))
         print("yakedo")
         # print(self.in_data)
         # print(self.in_data.shape)
@@ -1787,6 +1787,7 @@ def Dataset_setup_8ch_pt_augmentation(
         )
         # input(train_dataset)
         print(PGV_train_set.shape)
+        print(len(pt_train_set))
         print("fafafafafa")
         test_dataset = MyDataset5(
             PGV_test_set,

@@ -224,24 +224,27 @@ for data_type in data_type_list:
     peak_dic["p_duration"] = (
         extracted_peaks["ECG_P_Offsets"]["Index"]
         - extracted_peaks["ECG_P_Onsets"]["Index"]
-    )
+    ) / 500
     peak_dic["r_peak"] = extracted_peaks["ECG_R_Peaks"]["Amplitude"]
     peak_dic["qrs_duration"] = (
         extracted_peaks["ECG_S_Peaks"]["Index"]
         - extracted_peaks["ECG_Q_Peaks"]["Index"]
-    )
+    ) / 500
     peak_dic["t_peak"] = extracted_peaks["ECG_P_Peaks"]["Amplitude"]
     peak_dic["t_duration"] = (
         extracted_peaks["ECG_T_Offsets"]["Index"]
         - extracted_peaks["ECG_T_Onsets"]["Index"]
-    )
+    ) / 500
     peak_dic["pq_duration"] = (
         extracted_peaks["ECG_Q_Peaks"]["Index"]
         - extracted_peaks["ECG_P_Onsets"]["Index"]
-    )
+    ) / 500
     peak_dic["qr_duration"] = (
-        extracted_peaks["ECG_R_Offsets"]["Index"]
-        - extracted_peaks["ECG_Q_Peaks"]["Index"]
+        abs(
+            extracted_peaks["ECG_R_Offsets"]["Index"]
+            - extracted_peaks["ECG_Q_Peaks"]["Index"]
+        )
+        / 500
     )
     print(peak_dic)
     if data_type == "xo":
@@ -250,3 +253,14 @@ for data_type in data_type_list:
         reconx_dic = peak_dic
 
 print(xo_dic, reconx_dic)
+# 差分計算
+differences = {key: abs(xo_dic[key] - reconx_dic[key]) for key in xo_dic.keys()}
+
+# データフレーム作成
+df = pd.DataFrame(list(differences.items()), columns=["Feature", "Difference"])
+print(df)
+# CSV出力
+output_path = "differences.csv"
+# df.to_csv(output_path, index=False)
+
+print(f"差分データを {output_path} に保存しました。")

@@ -9,6 +9,10 @@ import matplotlib.cm as cm
 import pandas as pd
 from scipy import signal
 import time
+import numpy as np
+from glob import glob
+from scipy.signal import detrend, butter, filtfilt
+from scipy.ndimage import uniform_filter1d, median_filter
 
 ### グラフ表示が要らない場合はFalse
 DEBUG_PLOT = True
@@ -1809,10 +1813,22 @@ class HeartbeatCutter_prt:
             data = self.con_data[
                 center_idx - self.range : center_idx + self.range
             ].copy()
+            for j, column in enumerate(data.columns):
+                # df0_mul.plot()
+                # df1=df.iloc[:,i]
+                signal = data[column].copy().values
+                signal = nk.ecg_clean(signal, sampling_rate=500, method="neurokit")
+                # 基線を計算（信号全体の平均値を基線とする）
+                window_size = 150
+                baseline = median_filter(signal, size=window_size)
+                # 基線補正（信号全体から基線を引く）
+                signal = signal - baseline
+                data[column] = signal
+                # print(ecg_signal)
 
             p_onset = (
                 p_indexs_onsets[i] - center_idx + self.range
-            )  # prt_ele[0]はponsetの座標
+            )  # prt_ele[0]はponsetの座標f
             t_offset = (
                 t_indexs_offsets[i] - center_idx + self.range
             )  # prt_ele[2]はtoffsetの座標
@@ -2366,7 +2382,7 @@ def PTwave_search3(
 ):  # P_Onset,T_Offset,P_Offset,T_Onsetを返す関数
     peak_method = args.peak_method
     ecg_signal = nk.ecg_clean(ecg_A2, sampling_rate=sampling_rate, method="neurokit")
-    ecg_signal = ecg_signal[:4000]
+    ecg_signal = ecg_signal
     print(ecg_signal, len(ecg_signal))
     rpeaks = nk.ecg_peaks(ecg_signal, sampling_rate)[1][
         "ECG_R_Peaks"
@@ -2699,8 +2715,16 @@ def PTwave_plot(ecg_list, sampling_rate, headers, args):
     plt.close()
 
 
+def lowpass_filter(signal, sampling_rate, cutoff=0.5, order=5):
+    nyquist = 0.5 * sampling_rate
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype="low", analog=False)
+    filtered_signal = filtfilt(b, a, signal)
+    return filtered_signal
+
+
 def ecg_clean_df_12ch(df_12ch, rate=RATE):
-    ecg_signal = df_12ch.copy()["A1"]
+    ecg_signal = df_12ch.copy()["A2"]
     # cleand_signal=nk.ecg_clean(ecg_signal,sampling_rate=500,method="neurokit")
     # print(cleaned_signal)
     # print(type(cleaned_signal))
@@ -2717,6 +2741,14 @@ def ecg_clean_df_12ch(df_12ch, rate=RATE):
         # df1=df.iloc[:,i]
         ecg_signal = df_12ch[column].copy().values
         ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=rate, method="neurokit")
+        # 基線を計算（信号全体の平均値を基線とする）
+        # window_size = 200
+        # baseline = median_filter(ecg_signal, size=window_size)
+        # print(baseline, ecg_signal)
+        # # 基線補正（信号全体から基線を引く）
+        # ecg_signal = ecg_signal - baseline
+        # print(ecg_signal)
+
         df_12ch_cleaned[column] = ecg_signal
         # print(df[column])
         # print("")
@@ -2773,6 +2805,28 @@ def ecg_clean_df_15ch(df_15ch, rate):
     plt.tight_layout()
     plt.show()
     return df_15ch_cleaned
+
+
+def calculate_moving_average(csv_files, moving_ave_path, group_size=5):
+    print(csv_files)
+    print(moving_ave_path)
+    for i in range(len(csv_files)):
+        # 5ファイルずつのグループを取得
+        group = csv_files[i : i + group_size]
+        if len(group) != group_size:
+            break
+        print("aveva")
+        # 各CSVファイルを読み込んでデータをリストに保存
+        data_frames = [pd.read_csv(file) for file in group]
+
+        # 時系列ごとに平均を計算
+        combined_df = pd.concat(data_frames).groupby(level=0).mean()
+
+        # 出力ファイル名の設定
+        output_path = moving_ave_path + f"/dataset_{i:03}.csv"
+        # 平均結果を保存
+        combined_df.to_csv(output_path, index=False)
+        print(f"Processed and saved: {output_path}")
 
 
 def main(args):
@@ -2956,7 +3010,7 @@ def main(args):
     df_syn_resample_15ch_24s = df_syn_resample_15ch[: TIME * RATE]
     print(df_syn_resample_15ch_24s)
     plt.plot(df_syn_resample_15ch_24s["ch_1"])
-    plt.plot(df_12ch_cleaned["A1"])
+    plt.plot(df_12ch_cleaned["A2"])
     plt.show()
 
     con_data = pd.concat(
@@ -2996,26 +3050,21 @@ def main(args):
 
     con_data_np = con_data.to_numpy().T
     headers = con_data.columns
+
     print(headers)
     print(con_data_np.shape)
-    # PTwave_plot(ecg_list=con_data_np[15:],headers=headers[15:],sampling_rate=RATE,args=args)
-    # PQRST_plot_one(ecg=ecg_A2_np,header=headers[16],sampling_rate=RATE)
-    # PQRST_plot_one(ecg=con_data_np[15],header=headers[15],sampling_rate=RATE)
-    # PQRST_plot_grid(ecg_list=con_data_np[15:],headers=headers[15:],sampling_rate=RATE,args=args)
-    # PQRST_plot_grid_15ch(ecg_list=con_data_np[:15],headers=headers[:15],sampling_rate=RATE,args=args)
-
-    # sc_12ch_syn=peak_sc(df_12ch.copy(),RATE=RATE_12ch,TARGET=TARGET_CHANNEL_12CH)
-    # print(sc_12ch_syn)
-    # center_idxs=find_start_index(sc_12ch_syn[0],time_length=2.0)
-    # con_data=pd.concat([df_syn_resample_15ch_24s,df_12ch],axis=1)
     print(con_data_dir)
-    # print(center_idxs)
-    # # input()
 
-    # # if(args.output_filepath!=''):
-    # heartbeat_cutter=HeartbeatCutter(con_data.copy(),time_length=2.0)#切り出す秒数を指定する。
-    # heartbeat_cutter.cut_heartbeats(center_idxs,file_path="Dataset/pqrst/"+args.output_filepath,ch=TARGET_CHANNEL_15CH,cut_min_max_range=cut_min_max_range)
-    # # heartbeat_cutter.(center_idxs)
+    # 移動平均を計算
+    # 処理するCSVファイルの一覧を取得
+    csv_files = sorted(
+        glob(args.dataset_output_path + "/" + args.output_filepath + "/dataset_*.csv")
+    )
+    moving_ave_path = (
+        args.dataset_output_path + "/" + args.output_filepath + "/moving_ave_datasets"
+    )
+    create_directory_if_not_exists(moving_ave_path)
+    calculate_moving_average(csv_files, moving_ave_path, group_size=5)
 
 
 if __name__ == "__main__":
@@ -3070,11 +3119,8 @@ if __name__ == "__main__":
     # args.processed_datas_os=PROCESSED_DATA_DIR
     args.dataset_made_date = DATASET_MADE_DATE
     args.raw_datas_dir = RAW_DATA_DIR + "/takahashi_test/{}".format(args.dir_name)
-    args.dataset_output_path = (
-        PROCESSED_DATA_DIR
-        + "/synchro_data/patient8_{}_{}".format(
-            args.dataset_made_date, args.peak_method
-        )
+    args.dataset_output_path = PROCESSED_DATA_DIR + "/pqrst_nkmodule_since{}_{}".format(
+        args.dataset_made_date, args.peak_method
     )
     args.test_images_path = TEST_DIR + "/raw_datas_test"
     main(args)
