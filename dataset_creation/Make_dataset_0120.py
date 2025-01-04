@@ -3110,7 +3110,7 @@ if __name__ == "__main__":
     )
     args.TARGET_CHANNEL_12CH = "A2"
     args.cut_min_max_range = [1.0, 50.0]
-    args.reverse = "on"
+    args.reverse = "off"
     args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.project_path='/home/cs28/share/goto/goto/ecg_project'

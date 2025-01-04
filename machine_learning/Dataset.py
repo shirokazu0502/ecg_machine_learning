@@ -572,7 +572,6 @@ class MyDataset5(TensorDataset):
     def __getitem__(self, idx):
         # print(self.in_data)
         # print(self.in_data.shape)
-        print(self.name, len(self.name), idx)
 
         mul_data = self.in_data[idx]
         ecg_data = self.out_data[idx]
@@ -1667,13 +1666,11 @@ def Dataset_setup_8ch_pt_augmentation(
                 PGV_train = normalize_tensor_data(PGV_train)
 
                 # if(transform_type=="normal"):
-                # PGV_train=pt_extend(PGV_train.clone(),pt_array)
+                PGV_train = pt_extend(PGV_train.clone(), pt_array)
                 PGV_train_set.append(PGV_train)
                 ECG_train = torch.FloatTensor(data_ecg.T.values)
                 ECG_train = ECG_train.reshape(-1, ecg_ch_num, datalength)
                 ECG_train = normalize_tensor_data(ECG_train)
-
-                print(label_name)
                 print("aaaaaaaaaaaaaaaa")
                 # xx=ECG_train[0,0]
                 # xx2=ECG_train[0,1]
@@ -2024,7 +2021,7 @@ def Dataset_setup_8ch_pt_augmentation(
                 PGV_test = PGV_test.reshape(-1, 15, datalength)
                 PGV_test = normalize_tensor_data(PGV_test)
                 # if(transform_type=="normal"):#これは12ｎ誘導のP波T波の情報をつかってｋ埋めているから良くない⇒P波T波の位置を推論するｗモデルをつくるべき
-                # PGV_test=pt_extend(PGV_test.clone(),pt_array)
+                PGV_test = pt_extend(PGV_test.clone(), pt_array)
                 print("gggggggggggggggggggg")
                 print(PGV_test)
                 PGV_test_set.append(PGV_test)
@@ -2077,7 +2074,6 @@ def Dataset_setup_8ch_pt_augmentation(
             pt_index=pt_train_set,
         )
         # input(train_dataset)
-        print(ECG_train_set.shape)
         test_dataset = MyDataset5(
             PGV_test_set,
             ECG_test_set,
@@ -2095,7 +2091,6 @@ def Dataset_setup_8ch_pt_augmentation(
             pt_index=pt_train_set,
         )
         # input(train_dataset)
-        print(ECG_train_set.shape)
         test_dataset = MyDataset5(
             PGV_test_set,
             ECG_test_set,
