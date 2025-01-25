@@ -1751,12 +1751,11 @@ def save_csv2(data, ts, args, label_name, data_rec_or_xo):
     # output_path = os.path.join("leave_1_out_{}_R_weight_{}_augumentation={}".format(args.Dataset_name,str(args.loss_pt_on_off_R_weight),args.augumentation),"waveforms","{}".format(args.TARGET_NAME))
     output_path = os.path.join(
         OUTPUT_DIR
-        + "/{}/PRTweight_{}_{}_{}_augumentation={}/Waveforms".format(
+        + "/{}/PRTweight_{}_{}_{}/Waveforms".format(
             args.Dataset_name,
             str(args.loss_pt_on_off_P_weight),
             str(args.loss_pt_on_off_R_weight),
             str(args.loss_pt_on_off_T_weight),
-            args.augumentation,
         ),
         "{}".format(args.TARGET_NAME),
     )
@@ -1804,20 +1803,19 @@ def save_csv(data, ts, args, label_name, data_rec_or_xo):
         and args.loss_pt_on_off_T_weight != None
     ):
         output_path = os.path.join(
-            "leave_1_out_{}_PRTweight_{}_{}_{}_augumentation={}".format(
+            "leave_1_out_{}_PRTweight_{}_{}_{}".format(
                 args.Dataset_name,
                 str(args.loss_pt_on_off_P_weight),
                 str(args.loss_pt_on_off_R_weight),
                 str(args.loss_pt_on_off_T_weight),
-                args.augumentation,
             ),
             "waveforms",
             "{}".format(args.TARGET_NAME),
         )
     else:
         output_path = os.path.join(
-            "leave_1_out_{}_R_weight_{}_augumentation={}".format(
-                args.Dataset_name, str(args.loss_pt_on_off_R_weight), args.augumentation
+            "leave_1_out_{}_R_weight_{}".format(
+                args.Dataset_name, str(args.loss_pt_on_off_R_weight)
             ),
             "waveforms",
             "{}".format(args.TARGET_NAME),
@@ -1863,6 +1861,7 @@ def main(args):
         Dataset_name=args.Dataset_name,
         dataset_num=args.dataset_num,
         DataAugumentation=args.augumentation,
+        ave_data_flg=args.ave_data_flg,
     )
     print("len(train_dataset)")
     print(len(train_dataset))
@@ -2640,7 +2639,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "2025_0101_1640"
+    current_time = "2025_0122_2325"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")
@@ -2649,7 +2648,7 @@ if __name__ == "__main__":
     parser.add_argument("--loss_pt_on_off_R_weight", type=float, default="")
     parser.add_argument("--loss_pt_on_off_P_weight", type=float, default="")
     parser.add_argument("--loss_pt_on_off_T_weight", type=float, default="")
-    parser.add_argument("--dataset_num", type=int, default=10)  # ICCEの際は15心拍分で
+    parser.add_argument("--dataset_num", type=int, default=20)  # ICCEの際は15心拍分で
 
     parser.add_argument("--TARGET_NAME", type=str, default="")
     # parser.add_argument("--dname", type = str ,default = "test")
@@ -2663,7 +2662,9 @@ if __name__ == "__main__":
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[15, 1], [30, 2],[60, 2],[120, 2],[240,2]])#[[入力,ストライド],]
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[15, 1], [30, 2],[60, 2],[120,2],[240,2]])#[[入力,ストライド],]
     parser.add_argument(
-        "--enc_convlayer_sizes", type=list, default=[[15, 1], [30, 2]]
+        "--enc_convlayer_sizes",
+        type=list,
+        default=[[15, 1], [30, 2]],
     )  # [[入力,ストライド],]
     parser.add_argument(
         "--enc_fclayer_sizes", type=list, default=[6000, 500, 64]
@@ -2701,6 +2702,9 @@ if __name__ == "__main__":
     # parser.add_argument("--loss_fn_type", type=str, default='bce')
     parser.add_argument("--ecg_ch_num", type=int, default=8)
     parser.add_argument("--current_time", type=str)
+    parser.add_argument(
+        "--ave_data_flg", type=int, default=0
+    )  # 平均心拍を利用するか否か
     args = parser.parse_args()
     create_directory_if_not_exists(args.fig_root)
     main(args)

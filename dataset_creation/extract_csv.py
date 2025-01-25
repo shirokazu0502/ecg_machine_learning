@@ -8,16 +8,16 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from sympy import plot
 
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(base_dir)
 from config.settings import RAW_DATA_DIR, OUTPUT_DIR
 
 process_flg = 0
 if process_flg == 0:
-    patient_datas_dir = RAW_DATA_DIR + "/extract_patient_data/patient3"
+    patient_datas_dir = RAW_DATA_DIR + "/takahashi_test/patient1/patient1_1001_0"
     # df = pd.read_csv(patient_datas_dir+"/db20240513_180746.csv",header=None)
     df = pd.read_csv(
-        patient_datas_dir + "/db_patient3_16ch_data_20000.csv", header=None
+        patient_datas_dir + "/db20240513_180746.csv", header=None
     )
     # あるデータフレームの範囲を抽出する
     # # 5000刻みで3つfor文で作成する
@@ -25,10 +25,10 @@ if process_flg == 0:
     #     extract_df = df[5000*i:5000*(i+1)]
     #     extract_df.to_csv(RAW_DATA_DIR+'/extract_patient_data/db_patient_16ch_data{}_{}_{}.csv'.format(i+1, 5000*i, 5000*(i+1)), header=False, index=False)
     #     print("データを抽出しました。")
-    extract_df = df[487:1707]
+    extract_df = df[930585:932538]
     extract_df.to_csv(
         RAW_DATA_DIR
-        + "/extract_patient_data/patient3/db_patient3_16ch_data_4s_14s.csv",
+        + "/takahashi_test/patient1/patient1_1001_0/db_patient1_16ch_data_7624s_7640s.csv",
         header=False,
         index=False,
     )

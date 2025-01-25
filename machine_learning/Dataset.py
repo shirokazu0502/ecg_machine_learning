@@ -1587,7 +1587,7 @@ def get_unique_filename(base_filename, extension):
 #     plt.cla()
 #     plt.close()
 def Dataset_setup_8ch_pt_augmentation(
-    TARGET_NAME, transform_type, Dataset_name, dataset_num, DataAugumentation
+    TARGET_NAME, transform_type, Dataset_name, dataset_num, DataAugumentation, ave_data_flg
 ):
     datalength = 400
     ecg_ch_num = 8
@@ -1635,13 +1635,18 @@ def Dataset_setup_8ch_pt_augmentation(
     drop_col_mul = [0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
     outputpeak_path = "peak_compare_{}".format(Dataset_name)
     os.makedirs(outputpeak_path, exist_ok=True)
+    if ave_data_flg==1: # 平均心拍を利用する場合
+        ave_path="moving_ave_datasets/"
+    else:
+        ave_path = ""
+    print(ave_path)
+    print("fafafafafafa")
     for j in range(len(Train_list)):
         path_to_dataset = directory_path + "/" + Train_list[j] + "/"
-
         # input(path_to_dataset)
         for i in range(dataset_num):
-            path = path_to_dataset + "dataset_{}.csv".format(str(i).zfill(3))
-            pt_path = path_to_dataset + "ponset_toffsett_{}.csv".format(str(i).zfill(3))
+            path = path_to_dataset + ave_path + "dataset_{}.csv".format(str(i).zfill(3))
+            pt_path = path_to_dataset + "ponset_toffset_{}.csv".format(str(i).zfill(3))
 
             if not os.path.isfile(path) or not os.path.isfile(pt_path):
                 print("no file in " + Train_list[j])
@@ -1666,7 +1671,7 @@ def Dataset_setup_8ch_pt_augmentation(
                 PGV_train = normalize_tensor_data(PGV_train)
 
                 # if(transform_type=="normal"):
-                PGV_train = pt_extend(PGV_train.clone(), pt_array)
+                # PGV_train = pt_extend(PGV_train.clone(), pt_array)
                 PGV_train_set.append(PGV_train)
                 ECG_train = torch.FloatTensor(data_ecg.T.values)
                 ECG_train = ECG_train.reshape(-1, ecg_ch_num, datalength)
@@ -1695,8 +1700,8 @@ def Dataset_setup_8ch_pt_augmentation(
                 # plt.cla()
 
                 # input("")
-                if transform_type == "normal":
-                    ECG_train = pt_extend(ECG_train.clone(), pt_array)
+                # if transform_type == "normal":
+                # ECG_train = pt_extend(ECG_train.clone(), pt_array)
                 ECG_train_set.append(ECG_train)
                 label_train_set.append(label_name)
                 pt_train_set.append(pt_array)
@@ -1992,12 +1997,16 @@ def Dataset_setup_8ch_pt_augmentation(
 
     for i in range(len(label_train_set)):
         print(label_train_set[i], pt_train_set[i])
-
+    
+    if ave_data_flg==1: # 平均心拍を利用する場合
+        ave_path="moving_ave_datasets/"
+    else:
+        ave_path = ""
     for j in range(len(Test_list)):
         path_to_dataset = directory_path + "/" + Test_list[j] + "/"
         for i in range(dataset_num):
-            path = path_to_dataset + "dataset_{}.csv".format(str(i).zfill(3))
-            pt_path = path_to_dataset + "ponset_toffsett_{}.csv".format(str(i).zfill(3))
+            path = path_to_dataset + ave_path + "dataset_{}.csv".format(str(i).zfill(3))
+            pt_path = path_to_dataset + "ponset_toffset_{}.csv".format(str(i).zfill(3))
             if not os.path.isfile(path):
                 print("no file in " + Test_list[j])
                 pass
@@ -2018,10 +2027,11 @@ def Dataset_setup_8ch_pt_augmentation(
                 data_mul.columns = range(sh_mul[1])
                 print("TARGET_NAME={}".format(Test_list[j]))
                 PGV_test = torch.FloatTensor(data_mul.T.values)
+                print(i)
                 PGV_test = PGV_test.reshape(-1, 15, datalength)
                 PGV_test = normalize_tensor_data(PGV_test)
                 # if(transform_type=="normal"):#これは12ｎ誘導のP波T波の情報をつかってｋ埋めているから良くない⇒P波T波の位置を推論するｗモデルをつくるべき
-                PGV_test = pt_extend(PGV_test.clone(), pt_array)
+                # PGV_test = pt_extend(PGV_test.clone(), pt_array)
                 print("gggggggggggggggggggg")
                 print(PGV_test)
                 PGV_test_set.append(PGV_test)
@@ -2029,8 +2039,8 @@ def Dataset_setup_8ch_pt_augmentation(
                 ECG_test = torch.FloatTensor(data_ecg.T.values)
                 ECG_test = ECG_test.reshape(-1, ecg_ch_num, datalength)
                 ECG_test = normalize_tensor_data(ECG_test)
-                if transform_type == "normal":
-                    ECG_test = pt_extend(ECG_test.clone(), pt_array)
+                # if transform_type == "normal":
+                #     ECG_test = pt_extend(ECG_test.clone(), pt_array)
                 ECG_test_set.append(ECG_test)
                 label_test_set.append(label_name)
                 # print(label_name)
