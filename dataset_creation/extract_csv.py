@@ -14,21 +14,18 @@ from config.settings import RAW_DATA_DIR, OUTPUT_DIR
 
 process_flg = 0
 if process_flg == 0:
-    patient_datas_dir = RAW_DATA_DIR + "/takahashi_test/patient1/patient1_1001_0"
+    patient_datas_dir = RAW_DATA_DIR + "/patient_data/patient4/"
     # df = pd.read_csv(patient_datas_dir+"/db20240513_180746.csv",header=None)
-    df = pd.read_csv(
-        patient_datas_dir + "/db20240513_180746.csv", header=None
-    )
+    df = pd.read_csv(patient_datas_dir + "/AS_627158_lizmil.csv", header=None)
     # あるデータフレームの範囲を抽出する
     # # 5000刻みで3つfor文で作成する
     # for i in range(3):
     #     extract_df = df[5000*i:5000*(i+1)]
     #     extract_df.to_csv(RAW_DATA_DIR+'/extract_patient_data/db_patient_16ch_data{}_{}_{}.csv'.format(i+1, 5000*i, 5000*(i+1)), header=False, index=False)
     #     print("データを抽出しました。")
-    extract_df = df[930585:932538]
+    extract_df = df[750400:750700]
     extract_df.to_csv(
-        RAW_DATA_DIR
-        + "/takahashi_test/patient1/patient1_1001_0/db_patient1_16ch_data_7624s_7640s.csv",
+        RAW_DATA_DIR + "/patient_data/patient4/db_patient4_lizmil_data_AF.csv",
         header=False,
         index=False,
     )
@@ -38,16 +35,3 @@ elif process_flg == 1:
         OUTPUT_DIR
         + "/patient_data0427/PRTweight_1.0_0.001_1.0_augumentation=/Waveforms/patient"
     )
-    # 10個のCSVをつなげる
-    for i in range(10):
-        df = pd.read_csv(
-            patient_output_dir
-            + "/patient_0427_0.8s_0_dataset0{:02}_reconx.csv".format(i),
-            header=0,
-        )
-        merge_df = pd.concat([merge_df, df])
-    merge_df.to_csv(
-        patient_output_dir + "/patient_merge.csv", header=False, index=False
-    )
-else:
-    print("i")

@@ -2435,9 +2435,8 @@ def main(args):
             "MAE_V6": test_val_12ch_mean[7],
         }
         # write_to_csv(file_path='cross_val_results/Datasets={},MAE={}.csv'.format(args.Dataset_name,args.loss_pt_on_off),data=data_to_write)
-        create_directory_if_not_exists(OUTPUT_MAE_DIR)
         output_file = os.path.join(
-            OUTPUT_MAE_DIR
+            args.mae_folder
             + "/MAE_leave_1_out_{}_PRTweight_{}_{}_{}_augumentation={}.csv".format(
                 args.Dataset_name,
                 str(args.loss_pt_on_off_P_weight),
@@ -2639,7 +2638,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "2025_0122_2325"
+    current_time = "0205_1240"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")
@@ -2684,6 +2683,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fig_root", type=str, default=OUTPUT_DIR + "/" + f"figs_newref/{current_time}"
     )  # 学習過程及びテスト結果を出力するフォルダ
+    parser.add_argument(
+        "--mae_folder", type=str, default=OUTPUT_MAE_DIR + "/" + f"/{current_time}"
+    )  # MAE結果を出力するフォルダ
     parser.add_argument("--conditional", action="store_true")
     parser.add_argument("--train_off", action="store_false")
 
@@ -2707,4 +2709,5 @@ if __name__ == "__main__":
     )  # 平均心拍を利用するか否か
     args = parser.parse_args()
     create_directory_if_not_exists(args.fig_root)
+    create_directory_if_not_exists(args.mae_folder)
     main(args)

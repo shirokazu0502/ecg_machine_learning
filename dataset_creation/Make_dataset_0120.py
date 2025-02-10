@@ -2321,7 +2321,7 @@ def is_all_elements_integer(array_2d):
     return True
 
 
-def plot_and_select(ecg_all, ecg_signal, rpeak, window=200):
+def plot_and_select(ecg_all, rpeak, window=200):
     start = rpeak - window
     end = rpeak + window
     print(rpeak, start, end)
@@ -2362,8 +2362,8 @@ def plot_and_select(ecg_all, ecg_signal, rpeak, window=200):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.show()
-    plt.close()
+    # plt.show()
+    # plt.close()
 
     # ユーザー入力
     while True:
@@ -2722,7 +2722,7 @@ def PTwave_search3(
             # 疾患患者の場合
             elif manual_setting == 1:
                 # p波オンセット、T波オフセット手動設定
-                p_Onset_ele, t_Offset_ele = plot_and_select(ecg_all, ecg_signal, rpeak)
+                p_Onset_ele, t_Offset_ele = plot_and_select(ecg_all, rpeak)
                 # 患者の場合、波のピークが検出できない、switch求められないから全てをデータセットに
                 p_Offset_ele = None
                 t_Onset_ele = None
@@ -3147,6 +3147,7 @@ def main(args):
     heartbeat_cutter_prt = HeartbeatCutter_prt(
         con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
     )  # 切り出す秒数を指定する。
+    print(prt_eles)
     heartbeat_cutter_prt.cut_heartbeats(
         file_path=args.dataset_output_path + "/" + args.output_filepath,
         ch=TARGET_CHANNEL_15CH,

@@ -53,7 +53,6 @@ for dataset_number in range(20):
             ax.set_ylabel(column)
             ax.legend(loc="upper right")
 
-
     # ラベルの設定とレイアウト調整
     plt.tight_layout()
     plt.show()

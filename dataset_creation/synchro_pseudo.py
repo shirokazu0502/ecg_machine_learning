@@ -1,3 +1,4 @@
+import argparse
 from Make_dataset_0120 import (
     ecg_clean_df_15ch,
     linear_interpolation_resample_All,
@@ -10,8 +11,16 @@ from Make_dataset_0120 import (
     ecg_clean_df_12ch,
     PTwave_search3,
     HeartbeatCutter_prt,
+    plot_and_select,
+    write_text_file,
+    create_directory_if_not_exists,
+    calculate_moving_average,
 )
+from glob import glob
+from scipy.ndimage import uniform_filter1d, median_filter
+import numpy as np
 import pandas as pd
+import neurokit2 as nk
 from config.settings import (
     DATA_DIR,
     BASE_DIR,
@@ -24,65 +33,212 @@ from config.settings import (
     TIME,
     DATASET_MADE_DATE,
 )
+from config.name_dic import select_name_and_date
+
+RATE = 500.00
+RATE_12ch = 500.00
+RATE_15CH = 122.06
+TARGET_CHANNEL_12CH = "A2"
+TARGET_CHANNEL_15CH = validate_integer_input()
+reverse = "on"
+patient_number = "1"
 
 
-def cut_heartbeats(self, file_path, ch, cut_min_max_range, args):
-    center_idxs = self.prt_eles[:, 1]
-    p_indexs_onsets = self.prt_eles[:, 0]
-    t_indexs_offsets = self.prt_eles[:, 2]
-    p_indexs_offsets = self.prt_eles[:, 3]
-    t_indexs_onsets = self.prt_eles[:, 4]
-    p_indexs_peaks = self.prt_eles[:, 5]
-    q_indexs_peaks = self.prt_eles[:, 6]
-    s_indexs_peaks = self.prt_eles[:, 7]
-    t_indexs_peaks = self.prt_eles[:, 8]
-    create_directory(file_path)
-    data = []
-    datas = []
-    data.append(ch)
-    data.append(cut_min_max_range[0])
-    data.append(cut_min_max_range[1])
-    write_text_file(data, file_path + "/" + "TARGET_CHANNEL.txt")
-    print(file_path)
+def PT_wave_search(ecg_all):
+    data_list = []
+    # p波オンセット、T波オフセット手動設定
+    p_Onset_ele, t_Offset_ele = plot_and_select(ecg_all, 200)
+    # 患者の場合、波のピークが検出できない、switch求められないから全てをデータセットに
+    p_Offset_ele = None
+    t_Onset_ele = None
+    p_Peaks_ele = None
+    t_Peaks_ele = None
+    s_Peaks_ele = None
+    q_Peaks_ele = None
+    data_list.append(
+        [
+            p_Onset_ele,
+            200,
+            t_Offset_ele,
+            p_Offset_ele,
+            t_Onset_ele,
+            p_Peaks_ele,
+            q_Peaks_ele,
+            s_Peaks_ele,
+            t_Peaks_ele,
+        ]
+    )
+    prt_array = np.array(data_list)
+    return prt_array
 
-    pt_info = []
-    for i, center_idx in enumerate(center_idxs):
-        data = self.con_data[center_idx - self.range : center_idx + self.range].copy()
 
-        p_onset = (
-            p_indexs_onsets[i] - center_idx + self.range
-        )  # prt_ele[0]はponsetの座標
-        t_offset = (
-            t_indexs_offsets[i] - center_idx + self.range
-        )  # prt_ele[2]はtoffsetの座標
-        p_offset = (
-            p_indexs_offsets[i] - center_idx + self.range
-        )  # prt_ele[0]はponsetの座標
-        t_onset = (
-            t_indexs_onsets[i] - center_idx + self.range
-        )  # prt_ele[2]はtoffsetの座標
-        p_peak = (
-            p_indexs_peaks[i] - center_idx + self.range
-        )  # prt_ele[2]はtoffsetの座標
-        q_peak = (
-            q_indexs_peaks[i] - center_idx + self.range
-        )  # prt_ele[2]はtoffsetの座標
-        s_peak = (
-            s_indexs_peaks[i] - center_idx + self.range
-        )  # prt_ele[2]はtoffsetの座標
-        t_peak = (
-            t_indexs_peaks[i] - center_idx + self.range
-        )  # prt_ele[2]はtoffsetの座標
+def output_csv(file_path, file_name, data):
+    dt = 1.0 / RATE
+    time_tmp = np.arange(len(data)) * dt
+    # time_data=pd.DataFrame(time,column="Time")
+    time = pd.DataFrame()
+    time["Time"] = time_tmp
+    print(time)
+    data = data.reset_index(drop=True)
+    data_out = pd.concat([time, data], axis=1)
+    print(data_out)
+    data_out.to_csv(file_path + "/" + file_name, index=None)
 
-        # plot_heartbeats_sotoume(data.copy(),i,p_onset,t_offset)
-        # plot_heartbeats(data.copy(),i)
+
+def output_csv_eles(
+    file_path,
+    file_name,
+    p_onset,
+    t_offset,
+    p_offset,
+    t_onset,
+    p_peak,
+    q_peak,
+    s_peak,
+    t_peak,
+):
+    data = {
+        "p_onset": [p_onset],
+        "t_offset": [t_offset],
+        "p_offset": [p_offset],
+        "t_onset": [t_onset],
+        "p_peak": [p_peak],
+        "q_peak": [q_peak],
+        "s_peak": [s_peak],
+        "t_peak": [t_peak],
+    }
+    data_out = pd.DataFrame(data)
+    data_out.to_csv(file_path + "/" + file_name, index=None)
+
+
+def main(args):
+    dir_path = args.raw_datas_dir
+    csv_reader_16ch = CSVReader_16ch(dir_path)
+    print(dir_path)
+    df_16ch = csv_reader_16ch.process_files()
+    print(df_16ch)
+    cols = df_16ch.columns
+    df_15ch = pd.DataFrame()
+    for col in cols:
+        df_15ch[col] = df_16ch[col] - df_16ch["ch_16"]
+    df_15ch = df_15ch.drop(columns=["ch_16"])
+    df_15ch_cleaned = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=RATE_15CH)
+    df_resample_15ch = linear_interpolation_resample_All(
+        df=df_15ch_cleaned.copy(), sampling_rate=RATE_15CH, new_sampling_rate=RATE
+    )
+    df_15ch_cleaned = df_resample_15ch.copy()
+    csv_reader_12ch = CSVReader_12ch(dir_path)
+    df_12ch = csv_reader_12ch.process_files()
+    df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
+    if reverse == "off":
+        sc_15ch = peak_sc_15ch(
+            df_15ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH
+        )
+        peak_sc_plot(df_15ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH)
+    else:
+        df_15ch_reverse = df_15ch_cleaned.copy()
+        df_15ch_reverse[TARGET_CHANNEL_15CH] = (-1) * df_15ch_cleaned.copy()[
+            TARGET_CHANNEL_15CH
+        ]
+        df_15ch_cleaned = df_15ch_reverse.copy()
+        sc_15ch = peak_sc_15ch(
+            df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH
+        )
+        peak_sc_plot(df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH)
+        # 先頭は削除
+        sc_15ch = sc_15ch.drop(0)
+    sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
+    # print(sc_12ch)
+    # input()
+    peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
+    # 15chと12chのデータ同期
+    for i, (sc15, sc12) in enumerate(zip(sc_15ch[0], sc_12ch[0])):
+        center_15ch_idx = int(sc15 * RATE)
+        start_15ch_idx = int(center_15ch_idx - 0.4 * RATE)
+        end_15ch_idx = int(center_15ch_idx + 0.4 * RATE)
+        heartbeat_15ch = df_15ch_cleaned.iloc[start_15ch_idx:end_15ch_idx]
+        print(start_15ch_idx)
+        #     heartbeat_15ch.to_csv(
+        #         PROCESSED_DATA_DIR + "/synchro_data/15ch_{}.csv".format(i, center_15ch_idx),
+        #         header=False,
+        #         index=False,
+        #     )
+        center_12ch_idx = int(sc12 * RATE)
+        start_12ch_idx = int(center_12ch_idx - 0.4 * RATE)
+        end_12ch_idx = int(center_12ch_idx + 0.4 * RATE)
+        heartbeat_12ch = df_12ch_cleaned.iloc[start_12ch_idx:end_12ch_idx]
+        #     heartbeat_12ch.to_csv(
+        #         PROCESSED_DATA_DIR + "/synchro_data/12ch_{}.csv".format(i, center_12ch_idx),
+        #         header=False,
+        #         index=False,
+        #     )
+        # 15chと12ch結合
+        heartbeat_15ch = heartbeat_15ch.reset_index(drop=True)
+        heartbeat_12ch = heartbeat_12ch.reset_index(drop=True)
+        merge_df = pd.concat([heartbeat_15ch, heartbeat_12ch], axis=1)
+        print(merge_df)
+
+        # ecg_A2 = merge_df["A2"]
+        # print(ecg_A2)
+        # ecg_A2_np = ecg_A2.to_numpy().T
+        # # return 0
+        # # prt_eles=PTwave_search(ecg_A2=ecg_A2_np,header="A2",sampling_rate=RATE,args=args,time_length=0.7)
+        # prt_eles = PTwave_search3(
+        #     ecg_A2=ecg_A2_np,
+        #     header="A2",
+        #     sampling_rate=RATE,
+        #     args=args,
+        #     time_length=args.time_range,
+        #     method=args.peak_method,
+        # )  # 1213からPQRST全部検出できるcwt方を使う。
+        # heartbeat_cutter_prt = HeartbeatCutter_prt(print
+        #     con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
+        # )  # 切り出す秒数を指定する。
+        # heartbeat_cutter_prt.cut_heartbeats(
+        #     file_path=args.dataset_output_path + "/" + args.output_filepath,
+        #     ch=TARGET_CHANNEL_15CH,
+        #     cut_min_max_range=cut_min_max_range,
+        #     args=args,
+        # )print
+        prt_eles = PT_wave_search(heartbeat_12ch)
+        file_path = args.dataset_output_path
+        data = merge_df
+        p_onset = int(prt_eles[:, 0])
+        t_offset = int(prt_eles[:, 2])
+        p_offset = None
+        t_onset = None
+        p_peak = None
+        q_peak = None
+        s_peak = None
+        t_peak = None
+        for j, column in enumerate(data.columns):
+            # フィルタかける
+            data[column] = nk.ecg_clean(
+                data[column], sampling_rate=500, method="neurokit"
+            )
+            # pt_extendを実施
+            # インデックスp_onsetの値を取得
+            print(data)
+            value_at_p_onset = data.iloc[p_onset, j]
+            # インデックスt_offsetの値を取得
+            value_at_t_offset = data.iloc[t_offset, j]
+            # p_onsetより前の値を置き換える
+            data.iloc[:p_onset, j] = value_at_p_onset
+            # t_offsetより後の値を置き換える
+            data.iloc[t_offset:, j] = value_at_t_offset
+            signal = data[column].copy().values
+            # 基線を計算（信号の移動中央値を基線とする）
+            window_size = 200
+            baseline = median_filter(signal, size=window_size)
+            # 基線補正（信号全体から基線を引く）
+            signal = signal - baseline
+            data[column] = signal
         print("{}番目の心拍切り出し".format(i + 1))
         # print(data)
         file_name = "dataset_{}.csv".format(str(i).zfill(3))
-        self.output_csv(file_name=file_name, file_path=file_path, data=data.copy())
-        file_name_pt = "ponset_toffsett_{}.csv".format(str(i).zfill(3))
-        # self.output_csv_ponset_toffset(file_name=file_name_pt,file_path=file_path,p_onset=p_onset,t_offset=t_offset,p_offset=p_offset,t_onset=t_onset)
-        self.output_csv_eles(
+        output_csv(file_name=file_name, file_path=file_path, data=data.copy())
+        file_name_pt = "ponset_toffset_{}.csv".format(str(i).zfill(3))
+        output_csv_eles(
             file_name=file_name_pt,
             file_path=file_path,
             p_onset=p_onset,
@@ -94,160 +250,97 @@ def cut_heartbeats(self, file_path, ch, cut_min_max_range, args):
             s_peak=s_peak,
             t_peak=t_peak,
         )
-        pt_time = (t_offset - p_onset) / RATE
-        t_onset_time = (t_onset) / RATE
-        t_offset_time = (t_offset) / RATE
-        r_offset = 210
-        r_t_index = (t_onset - r_offset) / RATE
-        L_weight = 1.3  # 水増しで伸ばす最大の倍率
-        check_value = (
-            (400 - t_offset) / (t_onset - 210) / (L_weight - 1)
-        )  # ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
-
-        pt_info_temp = [
-            self.name,
-            self.pos,
-            str(i).zfill(3),
-            pt_time,
-            t_onset_time,
-            t_offset_time,
-            r_t_index,
-            check_value,
-            L_weight,
-        ]
-        pt_info.append(pt_info_temp)
-    # input(pt_info)
-    data_num_info = [[self.name, self.pos, len(center_idxs)]]
-    # append_to_csv(filename="Dataset/pqrst2/pt_time_all_{}s.csv".format(str(self.time_length)),data=pt_info)
-    # dataset_num_to_csv(filename="Dataset/pqrst2/dataset_num_{}s.csv".format(str(self.time_length)),data=data_num_info)
-    append_to_csv(
-        filename=args.dataset_output_path
-        + "/pt_time_all_{}s.csv".format(str(self.time_length)),
-        data=pt_info,
-    )
-    dataset_num_to_csv(
-        filename=args.dataset_output_path
-        + "/dataset_num_{}s.csv".format(str(self.time_length)),
-        data=data_num_info,
-    )
-
-
-RATE = 500.00
-RATE_12ch = 500.00
-RATE_15CH = 122.06
-TARGET_CHANNEL_12CH = "A2"
-TARGET_CHANNEL_15CH = validate_integer_input()
-reverse = "on"
-patient_number = "1"
-
-dir_path = RAW_DATA_DIR + f"/extract_patient_data/patient{patient_number}/"
-csv_reader_16ch = CSVReader_16ch(dir_path)
-df_16ch = csv_reader_16ch.process_files()
-print(df_16ch)
-cols = df_16ch.columns
-df_15ch = pd.DataFrame()
-for col in cols:
-    df_15ch[col] = df_16ch[col] - df_16ch["ch_16"]
-df_15ch = df_15ch.drop(columns=["ch_16"])
-df_15ch_cleaned = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=RATE_15CH)
-df_resample_15ch = linear_interpolation_resample_All(
-    df=df_15ch_cleaned.copy(), sampling_rate=RATE_15CH, new_sampling_rate=RATE
-)
-df_15ch_cleaned = df_resample_15ch.copy()
-csv_reader_12ch = CSVReader_12ch(dir_path)
-df_12ch = csv_reader_12ch.process_files()
-df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
-if reverse == "off":
-    sc_15ch = peak_sc_15ch(
-        df_15ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH
-    )
-    peak_sc_plot(df_15ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH)
-else:
-    df_15ch_reverse = df_15ch_cleaned.copy()
-    df_15ch_reverse[TARGET_CHANNEL_15CH] = (-1) * df_15ch_cleaned.copy()[
-        TARGET_CHANNEL_15CH
-    ]
-    df_15ch_cleaned = df_15ch_reverse.copy()
-    sc_15ch = peak_sc_15ch(
-        df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH
-    )
-    peak_sc_plot(df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH)
-print(df_15ch_cleaned)
-sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-# print(sc_12ch)
-# input()
-peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-# 15chと12chのデータ同期
-for i, (sc15, sc12) in enumerate(zip(sc_15ch[0], sc_12ch[0])):
-    center_15ch_idx = int(sc15 * RATE)
-    start_15ch_idx = int(center_15ch_idx - 0.4 * RATE)
-    end_15ch_idx = int(center_15ch_idx + 0.4 * RATE)
-    heartbeat_15ch = df_15ch_cleaned.iloc[start_15ch_idx:end_15ch_idx]
-    #     heartbeat_15ch.to_csv(
-    #         PROCESSED_DATA_DIR + "/synchro_data/15ch_{}.csv".format(i, center_15ch_idx),
-    #         header=False,
-    #         index=False,
+    # 移動平均を計算
+    # 処理するCSVファイルの一覧を取得
+    data_paths = sorted(glob(args.dataset_output_path + "/dataset_*.csv"))
+    # pt_array_paths = sorted(
+    #     glob(
+    #         args.dataset_output_path
+    #         + "/"
+    #         + args.output_filepath
+    #         + "/ponset_toffset_*.csv"
     #     )
-    center_12ch_idx = int(sc12 * RATE)
-    start_12ch_idx = int(center_12ch_idx - 0.4 * RATE)
-    end_12ch_idx = int(center_12ch_idx + 0.4 * RATE)
-    heartbeat_12ch = df_12ch_cleaned.iloc[start_12ch_idx:end_12ch_idx]
-    #     heartbeat_12ch.to_csv(
-    #         PROCESSED_DATA_DIR + "/synchro_data/12ch_{}.csv".format(i, center_12ch_idx),
-    #         header=False,
-    #         index=False,
-    #     )
-    # 15chと12ch結合
-    heartbeat_15ch = heartbeat_15ch.reset_index(drop=True)
-    heartbeat_12ch = heartbeat_12ch.reset_index(drop=True)
-    merge_df = pd.concat([heartbeat_15ch, heartbeat_12ch], axis=1)
-    print(merge_df)
-
-    # ecg_A2 = merge_df["A2"]
-    # print(ecg_A2)
-    # ecg_A2_np = ecg_A2.to_numpy().T
-    # # return 0
-    # # prt_eles=PTwave_search(ecg_A2=ecg_A2_np,header="A2",sampling_rate=RATE,args=args,time_length=0.7)
-    # prt_eles = PTwave_search3(
-    #     ecg_A2=ecg_A2_np,
-    #     header="A2",
-    #     sampling_rate=RATE,
-    #     args=args,
-    #     time_length=args.time_range,
-    #     method=args.peak_method,
-    # )  # 1213からPQRST全部検出できるcwt方を使う。
-    # heartbeat_cutter_prt = HeartbeatCutter_prt(
-    #     con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
-    # )  # 切り出す秒数を指定する。
-    # heartbeat_cutter_prt.cut_heartbeats(
-    #     file_path=args.dataset_output_path + "/" + args.output_filepath,
-    #     ch=TARGET_CHANNEL_15CH,
-    #     cut_min_max_range=cut_min_max_range,
-    #     args=args,
     # )
-
-    merge_df.to_csv(
-        PROCESSED_DATA_DIR
-        + f"/synchro_data/patient{patient_number}/dataset_{str(i).zfill(3)}.csv",
-        index=None,
-    )
+    # pt_extend(data_paths, pt_array_paths)
+    moving_ave_path = args.dataset_output_path + "/moving_ave_datasets"
+    create_directory_if_not_exists(moving_ave_path)
+    calculate_moving_average(data_paths, moving_ave_path, group_size=5)
 
     print("終了")
 
-    # prt_eles = PTwave_search3(
-    #     ecg_A2=ecg_A2_np,
-    #     header="A2",
-    #     sampling_rate=RATE,
-    #     args=args,
-    #     time_length=args.time_range,
-    #     method=args.peak_method,
-    # )  # 1213からPQRST全部検出できるcwt方を使う。
-    # heartbeat_cutter_prt = HeartbeatCutter_prt(
-    #     con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
-    # )  # 切り出す秒数を指定する。
-    # heartbeat_cutter_prt.cut_heartbeats(
-    #     file_path=args.dataset_output_path + "/" + args.output_filepath,
-    #     ch=TARGET_CHANNEL_15CH,
-    #     cut_min_max_range=cut_min_max_range,
-    #     args=args,
-    # )
+        # prt_eles = PTwave_search3(
+        #     ecg_A2=ecg_A2_np,
+        #     header="A2",
+        #     sampling_rate=RATE,
+        #     args=args,
+        #     time_length=args.time_range,
+        #     method=args.peak_method,
+        # )  # 1213からPQRST全部検出できるcwt方を使う。
+        # heartbeat_cutter_prt = HeartbeatCutter_prt(
+        #     con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
+        # )  # 切り出す秒数を指定する。
+        # heartbeat_cutter_prt.cut_heartbeats(
+        #     file_path=args.dataset_output_path + "/" + args.output_filepath,
+        #     ch=TARGET_CHANNEL_15CH,
+        #     cut_min_max_range=cut_min_max_range,
+        #     args=args,
+        # )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    # parser.add_argument("--dir_name", type=str, default='goto_0604/goto_0604_normal2')
+
+    parser.add_argument("--name", type=str, default="")
+    parser.add_argument("--date", type=str, default="")
+    parser.add_argument("--peak_method", type=str, default="")
+    parser.add_argument("--pos", type=str, default="")
+    parser.add_argument("--type", type=str, default="")
+    parser.add_argument("--dir_name", type=str, default="")
+    parser.add_argument("--png_path", type=str, default="")
+    parser.add_argument("--output_filepath", type=str, default="")
+    # parser.add_argument("--TARGET_CHANNEL_15CH", type=str, default='ch_1')
+    parser.add_argument("--TARGET_CHANNEL_12CH", type=str, default="")
+    # parser.add_argument("--cut_min_max_range", type=list, default=[0,10])
+    parser.add_argument("--cut_min_max_range", type=list, default="")
+    parser.add_argument("--time_range", type=float)
+    parser.add_argument(
+        "--reverse", type=str, default=""
+    )  # onだと波形逆さまにしてピーク検出。これはシートセンサを逆向きに貼ったとき
+    parser.add_argument("--project_path", type=str, default="")
+    parser.add_argument("--raw_datas_dir", type=str, default="")
+    parser.add_argument("--raw_datas_os", type=str, default="")
+    parser.add_argument("--dataset_made_date", type=str, default="")
+    parser.add_argument("--dataset_output_path", type=str, default="")
+    parser.add_argument("--test_images_path", type=str, default="")
+    args = parser.parse_args()
+    args.name, args.date = select_name_and_date()
+    args.peak_method = (
+        "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
+    )
+    args.pos = "0"
+    args.type = ""
+    args.dir_name = "{}/{}".format(args.name, args.type)
+    args.png_path = ""
+    args.time_range = 0.8
+    args.output_filepath = "{}_{}_{}s/{}".format(
+        args.name, args.date, str(args.time_range), args.pos
+    )
+    args.TARGET_CHANNEL_12CH = "A2"
+    args.cut_min_max_range = [1.0, 100.0]
+    args.reverse = "on"
+    args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
+    args.dir_name = "{}/{}".format(args.name, args.type)
+    # args.project_path='/home/cs28/share/goto/goto/ecg_project'
+    # args.raw_datas_os=RAW_DATA_DIR
+    # args.processed_datas_os=args.project_path+'/data/processed'
+    # args.processed_datas_os=PROCESSED_DATA_DIR
+    args.dataset_made_date = DATASET_MADE_DATE
+    args.raw_datas_dir = RAW_DATA_DIR + "/takahashi_test/{}".format(args.dir_name)
+    args.dataset_output_path = (
+        PROCESSED_DATA_DIR
+        + "/pqrst_nkmodule_since{}_{}/{}_{}_0.8s/0".format(
+            args.dataset_made_date, args.peak_method, args.name, args.date
+        )
+    )
+    main(args)

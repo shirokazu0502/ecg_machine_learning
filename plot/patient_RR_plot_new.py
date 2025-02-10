@@ -405,6 +405,7 @@ class ArrayComparator:
         # target=-15#後ろから3つを基準に平均二乗誤差でマッチするインデックスを探す。
         time1, time2, diff_12ch, diff_15ch = self.cul_diff()
         RESAMPLE_RESOLUTION = 0.1  # sec
+        print(time1[0], time1[-1])
         res_time1 = np.arange(time1[0], time1[-1], RESAMPLE_RESOLUTION)
         f1 = interp1d(time1, diff_12ch, kind="linear")
         res_diff_12ch = f1(res_time1)
@@ -416,7 +417,7 @@ class ArrayComparator:
         print(f"{search_win_len=}")
         print(f"{len(res_time2)=}")
         print(f"{len(res_diff_12ch)=}")
-        print(f"{len(res_diff_15ch[0:0 + search_win_len])=}")
+        print(f"{len(res_diff_15ch)=}")
         for idx in range(len(res_time2) - search_win_len):
             corr_list.append(
                 # np.dot(res_diff_12ch, res_diff_15ch[idx : idx + search_win_len])
@@ -495,7 +496,7 @@ class ArrayComparator:
         # plt.show()
         plt.close()
 
-    def create_corr_and_blanalt_plot(self, cut_time, loop_num):
+    def create_corr_and_blanalt_plot(self, cut_time, loop_num, data_label):
         cut_time, best_index = self.find_best_cut_time()
         time1, time2, diff1, diff2 = self.cul_diff()
         time1_v2 = time1 + cut_time
@@ -545,31 +546,29 @@ class ArrayComparator:
         axes[0].legend()
 
         # サブプロット2: Bland-Altman プロット
-        abs_RRI_diff = np.abs(con_all_data["diff_15ch"] - con_all_data["diff_lizmil"])
+        RRI_diff = con_all_data["diff_15ch"] - con_all_data["diff_lizmil"]
         BPM_15ch = 60 / con_all_data["diff_15ch"]
         BPM_lizmil = 60 / con_all_data["diff_lizmil"]
         mean_BPM = (BPM_15ch + BPM_lizmil) / 2
-        axes[1].scatter(
-            mean_BPM, abs_RRI_diff, color="blue", label="BPM vs RRI Difference"
-        )
+        axes[1].scatter(mean_BPM, RRI_diff, color="blue", label="BPM vs RRI Difference")
         axes[1].set_title("Bland-Altman Plot")
         axes[1].set_xlabel("mean_BPM")
         axes[1].set_ylabel("diff_RRI")
         axes[1].legend()
         # グラフ全体のタイトルとレイアウト調整
-        fig.suptitle(f"patient5 corr and blanaltman plot", fontsize=16)
+        fig.suptitle(f"{data_label} corr and blanaltman plot", fontsize=16)
         plt.tight_layout(rect=[0, 0, 1, 0.95])
 
         # 保存と表示
         combined_path = (
             DATA_DIR
-            + f"/RRI_plot/patient5/corr_blanalt_cuttime{cut_time:.0f}_{loop_num}.png"
+            + f"/RRI_plot/{data_label}/corr_blanalt_cuttime{cut_time:.0f}_{loop_num}.png"
         )
         plt.savefig(combined_path)
         # plt.show()
         plt.close()
         con_all_data.to_csv(
-            DATA_DIR + f"/RRI_plot/patient5/{loop_num}_corr{corr:.2f}.csv"
+            DATA_DIR + f"/RRI_plot/{data_label}/{loop_num}_corr{corr:.2f}.csv"
         )
 
 
@@ -706,7 +705,7 @@ def main(args):
     for col in cols:
         df_15ch[col] = df_16ch[col] - df_16ch["ch_16"]
     df_15ch = df_15ch.drop(columns=["ch_16"])
-    # df_15ch = df_15ch[0:1000000]
+    # df_15ch = df_15ch[:1000000]
 
     for tmp_name in os.listdir(dir_path):
         if "lizmil" in tmp_name:
@@ -714,10 +713,12 @@ def main(args):
             break
     lizmil_file_path = os.path.join(dir_path, filename)
     lizmil_df = pd.read_csv(lizmil_file_path, header=None)
+    print(len(lizmil_df))
+    print("iiiiii")
     lizmil_df = set_header_from_first_row(lizmil_df)
     # 同期時刻検出用
     # lizmil_df = lizmil_df[400000:450000]
-    lizmil_df = lizmil_df[100000:]
+    # lizmil_df = lizmil_df[100000:]
     # 全体プロット用
     df_15ch_size = len(df_15ch)
     # lizmil_df = lizmil_df[100000 : 100000 + df_15ch_size - 20000]
@@ -765,6 +766,7 @@ def main(args):
             continue
 
         print(f"Processing rows {start_idx} to {end_idx}")
+        print(df_15ch_size)
 
         # lizmil_dfのスライス
         lizmil_df_slice = lizmil_df[start_idx:end_idx]
@@ -792,50 +794,10 @@ def main(args):
         )
         comparator.peak_diff_plot()
         cut_time = comparator.find_best_cut_time()
+        print(cut_time)
+        print("aaaaaaaaaaaaaaa")
         comparator.peak_diff_plot_move(cut_time)
-        comparator.create_corr_and_blanalt_plot(cut_time, loop_num)
-
-    con_data = pd.concat(
-        [df_syn_resample_15ch_24s, df_12ch_cleaned], axis=1
-    )  # df_12ch_cleanedを用いる。
-    con_data_dir = args.dataset_output_path + "/" + args.output_filepath
-    con_data_dir = args.dataset_output_path + "/" + args.output_filepath
-    # con_data_dir="Dataset/pqrst_nkmodule_since{}_{}/".format(DATASET_MADE_DATE,args.peak_method)+args.output_filepath
-    # con_data_dir="Dataset/pqrst_nkmodule_since{}_{}/".format(DATASET_MADE_DATE,args.peak_method)+args.output_filepath
-    create_directory_if_not_exists(con_data_dir)
-
-    con_data.to_csv(con_data_dir + "/condata_24s.csv", index=None)
-
-    ecg_A2 = con_data["A2"]
-    print(ecg_A2)
-    ecg_A2_np = ecg_A2.to_numpy().T
-    # return 0
-    # prt_eles=PTwave_search(ecg_A2=ecg_A2_np,header="A2",sampling_rate=RATE,args=args,time_length=0.7)
-    prt_eles = PTwave_search3(
-        ecg_A2=ecg_A2_np,
-        header="A2",
-        sampling_rate=RATE,
-        args=args,
-        time_length=args.time_range,
-        method=args.peak_method,
-    )  # 1213からPQRST全部検出できるcwt方を使う。
-    # heartbeat_cutter_prt.cut_heartbeats(file_path="Dataset/pqrst_nkmodule_since{}_{}/".format(DATASET_MADE_DATE,args.peak_method)+args.output_filepath,ch=TARGET_CHANNEL_15CH,cut_min_max_range=cut_min_max_range,args=args)
-
-    con_data_np = con_data.to_numpy().T
-    headers = con_data.columns
-    print(headers)
-    print(con_data_np.shape)
-    # PTwave_plot(ecg_list=con_data_np[15:],headers=headers[15:],sampling_rate=RATE,args=args)
-    # PQRST_plot_one(ecg=ecg_A2_np,header=headers[16],sampling_rate=RATE)
-    # PQRST_plot_one(ecg=con_data_np[15],header=headers[15],sampling_rate=RATE)
-    # PQRST_plot_grid(ecg_list=con_data_np[15:],headers=headers[15:],sampling_rate=RATE,args=args)
-    # PQRST_plot_grid_15ch(ecg_list=con_data_np[:15],headers=headers[:15],sampling_rate=RATE,args=args)
-
-    # sc_12ch_syn=peak_sc(df_12ch.copy(),RATE=RATE_12ch,TARGET=TARGET_CHANNEL_12CH)
-    # print(sc_12ch_syn)
-    # center_idxs=find_start_index(sc_12ch_syn[0],time_length=2.0)
-    # con_data=pd.concat([df_syn_resample_15ch_24s,df_12ch],axis=1)
-    print(con_data_dir)
+        comparator.create_corr_and_blanalt_plot(cut_time, loop_num, args.patient)
 
 
 if __name__ == "__main__":
@@ -888,13 +850,13 @@ if __name__ == "__main__":
     # args.processed_datas_os=args.project_path+'/data/processed'
     # args.processed_datas_os=PROCESSED_DATA_DIR
     args.dataset_made_date = DATASET_MADE_DATE
-    args.raw_datas_dir = RAW_DATA_DIR + "/patient_data/patient5/RR_plot"
+    args.raw_datas_dir = RAW_DATA_DIR + "/patient_data/patient1/RR_plot"
     args.dataset_output_path = (
         PROCESSED_DATA_DIR
-        + "/synchro_data/patient5_{}_{}".format(
+        + "/synchro_data/patient1_{}_{}".format(
             args.dataset_made_date, args.peak_method
         )
     )
-    args.patient = "patient5"
+    args.patient = "patient4"
     args.test_images_path = TEST_DIR + "/raw_datas_test"
     main(args)

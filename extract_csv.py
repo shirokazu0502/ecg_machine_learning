@@ -14,10 +14,10 @@ from config.settings import RAW_DATA_DIR, OUTPUT_DIR
 
 process_flg = 0
 if process_flg == 0:
-    patient_datas_dir = RAW_DATA_DIR + "/extract_patient_data/patient5"
+    patient_datas_dir = RAW_DATA_DIR + "/takahashi_test/patient1"
     # df = pd.read_csv(patient_datas_dir+"/db20240513_180746.csv",header=None)
     df = pd.read_csv(
-        patient_datas_dir + "/db20240822_171309_overnight.csv", header=None
+        patient_datas_dir + "/dbraw_20240513_180746.csv", header=None
     )
     # あるデータフレームの範囲を抽出する
     # # 5000刻みで3つfor文で作成する
@@ -25,10 +25,10 @@ if process_flg == 0:
     #     extract_df = df[5000*i:5000*(i+1)]
     #     extract_df.to_csv(RAW_DATA_DIR+'/extract_patient_data/db_patient_16ch_data{}_{}_{}.csv'.format(i+1, 5000*i, 5000*(i+1)), header=False, index=False)
     #     print("データを抽出しました。")
-    extract_df = df[0:20000]
+    extract_df = df[0:100000]
     extract_df.to_csv(
         RAW_DATA_DIR
-        + "/extract_patient_data/patient3/db_patient3_16ch_data_0s_19s.csv",
+        + "/takahashi_test/patient1/db_patient1_16ch_data_0s_820s.csv",
         header=False,
         index=False,
     )
