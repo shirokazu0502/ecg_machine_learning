@@ -244,9 +244,10 @@ def ecg_clean_df_15ch(df_15ch, rate):
 def find_nearest(row, df1_time, df1_diff):
     nearest_idx = (df1_time - row["time"]).abs().idxmin()
     min_abs_diff = abs(df1_diff.iloc[nearest_idx] - row["diff"])
+    # 前回のインデックスより前のものならスキップ
 
     # 前後5つの範囲で探索
-    for offset in range(1, 6):  # 1～5の範囲で前後のインデックスを確認
+    for offset in range(1, 4):  # 1～5の範囲で前後のインデックスを確認
         if nearest_idx - offset >= 0:  # 前側のインデックスが範囲内の場合
             tmp_abs_diff = abs(df1_diff.iloc[nearest_idx - offset] - row["diff"])
             if tmp_abs_diff < min_abs_diff and tmp_abs_diff < 0.008:
@@ -512,15 +513,47 @@ class ArrayComparator:
         lizmil_time = con_lizmil_data["time"]
         lizmil_diff = con_lizmil_data["diff"]
         # 最も近いdf1のインデックスを探す
-        con_15ch_data["nearest_idx"] = con_15ch_data.apply(
-            find_nearest, df1_time=lizmil_time, df1_diff=lizmil_diff, axis=1
-        )
+        # con_15ch_data["nearest_idx"] = con_15ch_data.apply(
+        #     find_nearest,
+        #     df1_time=lizmil_time,
+        #     df1_diff=lizmil_diff,
+        #     previous_index=previous_index,
+        #     axis=1,
+        # )
+        for i, row in con_15ch_data.iterrows():
+            nearest_idx = find_nearest(
+                row,
+                df1_time=lizmil_time,
+                df1_diff=lizmil_diff,
+            )
+            con_15ch_data.at[i, "nearest_idx"] = (
+                nearest_idx  # 結果をデータフレームに格納
+            )
+
         con_all_data = con_15ch_data.merge(
             con_lizmil_data,
             left_on="nearest_idx",
             right_index=True,
             suffixes=("_15ch", "_lizmil"),
         )
+        # 同一のnearest_idxがあれば一つだけ残す
+        con_all_data["diff_lizmil_and_15ch"] = abs(
+            con_all_data["diff_15ch"] - con_all_data["diff_lizmil"]
+        )
+        con_all_data = con_all_data.loc[
+            con_all_data.groupby("nearest_idx")["diff_lizmil_and_15ch"].idxmin()
+        ]
+        rows_to_drop = []  # 削除する行のインデックスを記録
+        previous_time = None
+        for i, row in con_all_data.iterrows():
+            if previous_time is not None and row["time_15ch"] < previous_time:
+                rows_to_drop.append(i)  # 削除対象の行を記録
+                continue  # スキップ
+
+            previous_time = row["time_15ch"]  # 前回の時間を更新
+
+        con_all_data.drop(rows_to_drop, inplace=True)
+        con_all_data.reset_index(drop=True, inplace=True)  # インデックスをリセット
         con_all_data.to_csv("./con_data.csv")
         print(con_all_data)
         corr = con_all_data["diff_15ch"].corr(con_all_data["diff_lizmil"])
@@ -850,13 +883,13 @@ if __name__ == "__main__":
     # args.processed_datas_os=args.project_path+'/data/processed'
     # args.processed_datas_os=PROCESSED_DATA_DIR
     args.dataset_made_date = DATASET_MADE_DATE
-    args.raw_datas_dir = RAW_DATA_DIR + "/patient_data/patient1/RR_plot"
+    args.raw_datas_dir = RAW_DATA_DIR + "/patient_data/patient6/RR_plot"
     args.dataset_output_path = (
         PROCESSED_DATA_DIR
-        + "/synchro_data/patient1_{}_{}".format(
+        + "/synchro_data/patient6_{}_{}".format(
             args.dataset_made_date, args.peak_method
         )
     )
-    args.patient = "patient4"
+    args.patient = "patient6"
     args.test_images_path = TEST_DIR + "/raw_datas_test"
     main(args)

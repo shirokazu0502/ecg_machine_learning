@@ -63,29 +63,33 @@ def create_corr_blanalt_plot(dataframe):
     axes[0].legend()
 
     # サブプロット2: Bland-Altman プロット
-    abs_RRI_diff = np.abs(dataframe["diff_15ch"] - dataframe["diff_lizmil"])
+    RRI_diff = dataframe["diff_15ch"] - dataframe["diff_lizmil"]
     BPM_15ch = 60 / dataframe["diff_15ch"]
     BPM_lizmil = 60 / dataframe["diff_lizmil"]
     mean_BPM = (BPM_15ch + BPM_lizmil) / 2
-    axes[1].scatter(mean_BPM, abs_RRI_diff, color="blue", label="BPM vs RRI Difference")
+    axes[1].scatter(mean_BPM, RRI_diff, color="blue", label="BPM vs RRI Difference")
     axes[1].set_title("Bland-Altman Plot")
     axes[1].set_xlabel("mean_BPM")
     axes[1].set_ylabel("diff_RRI")
+    axes[1].set_ylim([-1, 1])  # y軸の範囲を-1から1に設定
     axes[1].legend()
     # グラフ全体のタイトルとレイアウト調整
     fig.suptitle(f"patient5 corr and blanaltman plot", fontsize=16)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     # 保存と表示
-    combined_path = DATA_DIR + f"/RRI_plot/patient5/patient5_merge_corr_blanalt.png"
+    combined_path = (
+        DATA_DIR + f"/RRI_plot/{patient_num}/{patient_num}_merge_corr_blanalt.png"
+    )
     plt.savefig(combined_path)
     # plt.show()
     plt.close()
-    dataframe.to_csv(DATA_DIR + f"/RRI_plot/patient5/patient5_merge_df.csv")
+    dataframe.to_csv(DATA_DIR + f"/RRI_plot/{patient_num}/{patient_num}_merge_df.csv")
 
 
+patient_num = "patient5"
 # CSVファイルが保存されているフォルダのパス
-folder_path = DATA_DIR + "/RRI_plot/patient5"
+folder_path = DATA_DIR + f"/RRI_plot/{patient_num}"
 
 # 結合されたデータを格納するリスト
 dataframes = []
