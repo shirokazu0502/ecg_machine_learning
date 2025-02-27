@@ -2857,13 +2857,6 @@ def ecg_clean_df_12ch(df_12ch, rate=RATE):
 
 def ecg_clean_df_15ch(df_15ch, rate):
     ecg_signal = df_15ch.copy()["ch_1"]
-    # cleand_signal=nk.ecg_clean(ecg_signal,sampling_rate=500,method="neurokit")
-    # print(cleaned_signal)
-    # print(type(cleaned_signal))
-    # plt.plot(cleaned_signal)
-    # plt.plot(df_15ch["ch_1"])
-    # plt.title("org")
-    # plt.show()
     df_15ch_cleaned = pd.DataFrame()
     for i, column in enumerate(df_15ch.columns):
         # df0_mul.plot()
@@ -2886,14 +2879,6 @@ def ecg_clean_df_15ch(df_15ch, rate):
     plt.ylim(-100, 200)
     for axis in ["top", "bottom", "left", "right"]:
         ax1.spines[axis].set_linewidth(axis_line_width)
-    # ax2 = fig.add_subplot(2, 1, 2)
-    # ax2.plot(df_15ch_cleaned["ch_1"],label='filtered ch1')
-    # ax2.legend(loc='center left', fontsize=12, ncol=1, bbox_to_anchor=(1, 0.5))
-    # ax2.tick_params(labelsize=tick_label_size,direction='in')
-    # # print(type(df_15ch_cleaned))
-    # plt.plot(df_15ch_cleaned["ch_1"])
-    # plt.title("cleaned")
-    # plt.savefig("taniguchi_filter.svg")
     plt.tight_layout()
     plt.show()
     return df_15ch_cleaned
@@ -2965,16 +2950,6 @@ def main(args):
     # input("")
     # 同期用インデックスファイルを読み込みと書き込み
     handler = AutoIntegerFileHandler(dir_path + "/同期インデックス_nkmodule.txt")
-    # 同期する前
-    # if(DEBUG_PLOT==True):
-    #     Plot_15ch=MultiPlotter(df_15ch.copy(),RATE=RATE_15CH)
-    #     Plot_15ch.plot_all_channels(xmin=0,xmax=10,ylim=0)
-    #     # Plot_15ch.multi_plot(xmin=0,xmax=100,ylim=0)
-    #     # Plot_16ch=MultiPlotter(df_16ch.copy(),RATE=RATE_15CH)
-    #     # Plot_16ch.multi_plot(xmin=0,xmax=100,ylim=0)
-    #     plt.show()
-    #     plt.close()
-    # input()
 
     if handler.check_file() == False:  # 同期するためのファイルが存在していないとき。
         # df_15ch_pf = multi_pf(df_15ch.copy(),fp=2.0,fs=1.0)
@@ -2988,16 +2963,6 @@ def main(args):
             df=df_15ch_pf.copy(), sampling_rate=RATE_15CH, new_sampling_rate=RATE
         )
         df_15ch_pf = df_resample_15ch.copy()
-        # Plot_15ch_pf=MultiPlotter(df_15ch_pf.copy(),RATE=RATE_15CH)
-        # Plot_15ch_pf.multi_plot(xmin=0,xmax=10,ylim=0)
-        # df_15ch_reverse=df_15ch_pf.copy()
-        # df_15ch_reverse[TARGET_CHANNEL_15CH]=(-1)*df_15ch_pf.copy()[TARGET_CHANNEL_15CH]
-        # Plot_15ch_reverse=MultiPlotter(df_15ch_reverse.copy(),RATE=RATE_15CH)
-        # Plot_15ch_reverse.multi_plot(xmin=0,xmax=10,ylim=0)
-        # plt.show()
-        # plt.close()
-        # df_12ch_pf = hpf_lpf(df_12ch.copy(),HPF_fp=2.0,HPF_fs=1.0,LPF_fp=55.0,LPF_fs=60.0,RATE=RATE_12ch)
-        # sc_15ch=peak_sc(df_15ch_pf[syn_index:syn_index+20*RATE_15CH].copy(),RATE=RATE_15ch,TARGET="ch_4")
         if reverse == "off":
             sc_15ch = peak_sc_15ch(
                 df_15ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15CH
@@ -3091,9 +3056,6 @@ def main(args):
             RATE12=RATE_12ch,
             RATE15=RATE,
         )  # cleanされた12chにする。
-        # Plot_12ch.multi_plot_12ch_15ch_with_sc(xmin=0,xmax=TIME,ylim=0,sc=sc_15ch_pf,ch=TARGET_CHANNEL_15CH,png_path=args.png_path+'15chsc')
-        # Plot_12ch.multi_plot_12ch_15ch_with_sc(xmin=0,xmax=TIME,ylim=0,sc=sc_12ch,ch=TARGET_CHANNEL_15CH,png_path=args.png_path+'12chsc')
-        # Plot_12ch.multi_plot_12ch_15ch_with_sc(xmin=0,xmax=TIME,ylim=0,sc=sc_15ch_pf,ch=TARGET_CHANNEL_15CH,png_path=args.png_path+'15chsc')
         Plot_12ch.multi_plot_12ch_15ch_with_sc_2(
             xmin=0,
             xmax=5,

@@ -2243,7 +2243,7 @@ def main(args):
             plt.close()
 
         # plot_scatter_2d(z=z_temps,labels=label_temps,latent_size=latent_size,ts=ts,args=args)
-        torch.save(vae.state_dict(), args.pth)
+        torch.save(vae.state_dict(), os.path.join("model_pth", args.pth))
         torch.save(vae.state_dict(), os.path.join(args.fig_root, str(ts), args.pth))
 
     elif args.mode == "zplot":
@@ -2638,7 +2638,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0205_1240"
+    current_time = "0227_0900"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")
@@ -2690,7 +2690,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_off", action="store_false")
 
     parser.add_argument(
-        "--pth", type=str, default=r"vae_cross_v2_5.pth"
+        "--pth", type=str, default=r"vae_cross_z4.pth"
     )  # 学習モデルのファイル名指定
     parser.add_argument("--mode", type=str, default="train")
     parser.add_argument(

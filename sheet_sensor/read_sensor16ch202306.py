@@ -162,7 +162,8 @@ if __name__ == '__main__':
         if "nRF" in (list(serial.tools.list_ports.comports())[idx][1]):
             PORT_NUM = idx
             print("detect^")
-    PORT_NUM = 1
+        print(idx)
+    PORT_NUM = 4
     ser.port = list(serial.tools.list_ports.comports())[PORT_NUM][0]
     print(list(serial.tools.list_ports.comports())[PORT_NUM][0])
     print("kokodayo")

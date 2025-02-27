@@ -704,6 +704,26 @@ class MyDataset2(TensorDataset):
         return mul_data, ecg_data, name
 
 
+class MyDataset_for_estimate(TensorDataset):
+    def __init__(self, in_data, out_data, name, transform=None):
+        self.in_data = in_data
+        self.out_data = out_data
+        self.data_num = len(in_data)
+        self.name = name
+        self.transform = transform
+
+    def __len__(self):
+        return self.data_num
+
+    def __getitem__(self, idx):
+        batch_size = self.in_data.shape[0]  # バッチサイズ
+        random_numbers = torch.randint(low=0, high=251, size=(batch_size,))
+        pgv_data = self.in_data[idx]
+        name = self.name[idx]
+
+        return pgv_data, name
+
+
 def noise_make(mean, scale, datanum, ch_num):
     rnd = np.random.normal(loc=mean, scale=scale, size=datanum * ch_num)
     rnd = rnd.reshape(-1, datanum, ch_num)
@@ -1587,7 +1607,12 @@ def get_unique_filename(base_filename, extension):
 #     plt.cla()
 #     plt.close()
 def Dataset_setup_8ch_pt_augmentation(
-    TARGET_NAME, transform_type, Dataset_name, dataset_num, DataAugumentation, ave_data_flg
+    TARGET_NAME,
+    transform_type,
+    Dataset_name,
+    dataset_num,
+    DataAugumentation,
+    ave_data_flg,
 ):
     datalength = 400
     ecg_ch_num = 8
@@ -1635,8 +1660,8 @@ def Dataset_setup_8ch_pt_augmentation(
     drop_col_mul = [0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
     outputpeak_path = "peak_compare_{}".format(Dataset_name)
     os.makedirs(outputpeak_path, exist_ok=True)
-    if ave_data_flg==1: # 平均心拍を利用する場合
-        ave_path="moving_ave_datasets/"
+    if ave_data_flg == 1:  # 平均心拍を利用する場合
+        ave_path = "moving_ave_datasets/"
     else:
         ave_path = ""
     print(ave_path)
@@ -1997,9 +2022,9 @@ def Dataset_setup_8ch_pt_augmentation(
 
     for i in range(len(label_train_set)):
         print(label_train_set[i], pt_train_set[i])
-    
-    if ave_data_flg==1: # 平均心拍を利用する場合
-        ave_path="moving_ave_datasets/"
+
+    if ave_data_flg == 1:  # 平均心拍を利用する場合
+        ave_path = "moving_ave_datasets/"
     else:
         ave_path = ""
     for j in range(len(Test_list)):
@@ -2153,3 +2178,119 @@ def Dataset_setup_8ch_pt_augmentation(
 # Dataset_setup_12ch_pt_15ch_only(TARGET_NAME="osaka",transform_type='normal',Dataset_name='new_sensor_N=6_pt_8s',dataset_num=5)
 # train,test=Dataset_setup_12ch(TARGET_NAME="matumoto")
 # train,test=Dataset_setup_12ch(0,0)
+def Dataset_setup_15ch_only(
+    TARGET_NAME,
+    transform_type,
+    Dataset_name,
+    dataset_num,
+):
+    """
+    推定のみで利用する、15チャネルのみのデータセットを作成する関数の例。
+    例）Dataset_setup_15ch_only(
+            TARGET_NAME="osaka",
+            transform_type=args.transform_type,
+            Dataset_name="15ch_only",
+            dataset_num=3,
+        )
+
+    Parameters
+    ----------
+    TARGET_NAME : str
+        人名や施設名などターゲットを指定する文字列 (train/test の分割に使用)
+    transform_type : str
+        データセット生成時に行う変換や前処理の指定（"normal", "random" など）
+    Dataset_name : str
+        ディレクトリ名。15ch のデータが格納されているフォルダ
+    dataset_num : int
+        1人(または1施設)あたりの CSV データ数 ( dataset_000.csv ~ dataset_{N}.csv )
+
+    Returns
+    -------
+    train_dataset, test_dataset : torch.utils.data.Dataset
+        学習用/テスト用の 15 チャネルのみを格納したデータセット
+        （推論専用であれば、train_dataset を省略し test_dataset のみ返すなどでもOK）
+    """
+
+    datalength = 400
+    # 15ch の入力を格納
+    PGV_train_set = []
+    PGV_test_set = []
+    label_train_set = []
+    label_test_set = []
+    pt_train_set = []
+    pt_test_set = []
+
+    # データ置き場のパス（PROCESSED_DATA_DIR は事前に定義されているものとする）
+    directory_path = PROCESSED_DATA_DIR + "/" + Dataset_name + "/" + TARGET_NAME
+
+    # ディレクトリ一覧の取得
+    dir_names = get_directory_names_all(directory_path)
+    print(dir_names)
+    print(len(dir_names))
+
+    path_to_dataset = directory_path + "/"
+    for i in range(dataset_num):
+        csv_path = path_to_dataset + f"dataset_{str(i).zfill(3)}.csv"
+
+        if not os.path.isfile(csv_path):
+            print(f"No file in {TARGET_NAME}: {csv_path}")
+            continue
+
+        label_name = (
+            replace_slash_with_underscore(TARGET_NAME) + f"_dataset{str(i).zfill(3)}"
+        )
+        data_15ch = pd.read_csv(csv_path, header=None, skiprows=1)
+        # 先頭列の時間を削除
+        drop_col = [0]
+        data_15ch = data_15ch.drop(drop_col, axis=1)
+        print(data_15ch)
+
+        sh_15 = data_15ch.shape
+        data_15ch.columns = range(sh_15[1])
+        print(sh_15)
+
+        PGV_test = torch.FloatTensor(data_15ch.T.values)
+        PGV_test = PGV_test.reshape(-1, 15, datalength)
+        PGV_test = normalize_tensor_data(PGV_test)
+
+        PGV_test_set.append(PGV_test)
+        label_test_set.append(label_name)
+
+    print("Finished loading 15ch data.")
+    print(f"Test samples: {len(PGV_test_set)}")
+
+    # list -> tensor 結合
+    if len(PGV_train_set) > 0:
+        PGV_train_set = torch.cat(PGV_train_set, dim=0)
+    else:
+        PGV_train_set = torch.empty(0)  # 空テンソルなどで初期化
+
+    if len(PGV_test_set) > 0:
+        PGV_test_set = torch.cat(PGV_test_set, dim=0)
+    else:
+        PGV_test_set = torch.empty(0)
+
+    # Dataset 化
+    # もし 15ch だけ扱う専用の Dataset クラスがあればそちらを使うのを推奨
+    # 既存の MyDatasetX が (PGV, ECG, label) を想定している場合は ECG に None や空テンソルを渡すか、
+    # 15ch 専用クラスを作成してください。
+    if transform_type == "random":
+        test_dataset = MyDataset4(
+            PGV_test_set,
+            None,
+            label_test_set,
+            transform=random_slide2(),
+            pt_index=pt_test_set,
+        )
+    elif transform_type == "normal":
+        test_dataset = MyDataset_for_estimate(
+            PGV_test_set,
+            None,
+            label_test_set,
+            transform="",
+        )
+    else:
+        # 追加の transform_type があれば対応
+        test_dataset = MyDataset2(PGV_test_set, None, label_test_set)
+
+    return test_dataset
