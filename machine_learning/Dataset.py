@@ -26,7 +26,7 @@ from config.settings import (
     RAW_DATA_DIR,
     TEST_DIR,
     RATE,
-    RATE_15CH,
+    RATE_16CH,
     TIME,
     DATASET_MADE_DATE,
 )
@@ -113,7 +113,7 @@ def data_plot_after_splitting2(
     figtitle: str = "title",
     savefig: bool = True,
     figpath: str = "./plot_target",
-    fontsize: int = 15,
+    fontsize: int = 16,
 ) -> None:
     """心拍を分割したものをまとめてプロットする関数。
 
@@ -191,7 +191,7 @@ def data_plot_after_splitting2(
         )
         # ax2.set_ylim([-100,100])
         # print(len(doppler))
-        for i in range(15):
+        for i in range(16):
             # ax2.plot(time_array, doppler[:][i])
             ax2.plot(time_array, doppler[i][:])
         # ax2.set_xticks(np.linspace(0, 2, 3),fontsize=5)
@@ -323,7 +323,7 @@ def data_plot_after_splitting(
         )
         # ax2.set_ylim([-100,100])
         # print(len(doppler))
-        for i in range(15):
+        for i in range(16):
             # ax2.plot(time_array, doppler[:][i])
             ax2.plot(time_array, doppler[i][:])
 
@@ -534,7 +534,7 @@ class MyDataset(TensorDataset):
         return mul_data, ecg_data, name
 
 
-class MyDataset_15ch_only(TensorDataset):
+class MyDataset_16ch_only(TensorDataset):
     def __init__(self, in_data, name, pt_index, transform=None):
         self.in_data = in_data
         self.data_num = len(in_data)
@@ -880,7 +880,7 @@ def make_p_onset_extension_datas(
         )
 
         First_PGV_value_tensor = new_PGV_data[:, -1]
-        # 形状を[15, 1]に変更
+        # 形状を[16, 1]に変更
         First_PGV_value_tensor_view = First_PGV_value_tensor.view(
             First_PGV_value_tensor.shape[0], 1
         )  # または tensor_a.reshape(8, 1)
@@ -913,7 +913,7 @@ def make_p_onset_extension_datas(
     # plt.show()
     # plt.cla()
     # plt.close()
-    # plt.title("15ch_ch2")
+    # plt.title("16ch_ch2")
     # plt.plot(np.arange(0,0.8,0.002),PGV_datas[1],label="org")
     # plt.scatter(pt_array[0]*0.002,PGV_datas[1,pt_array[0]])
     # plt.plot(np.arange(0,0.8,0.002),new_PGV_data_400[1],label="augumentation")
@@ -1036,7 +1036,7 @@ def make_pq_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation
         )
 
         First_PGV_value_tensor = new_PGV_data[:, -1]
-        # 形状を[15, 1]に変更
+        # 形状を[16, 1]に変更
         First_PGV_value_tensor_view = First_PGV_value_tensor.view(
             First_PGV_value_tensor.shape[0], 1
         )  # または tensor_a.reshape(8, 1)
@@ -1072,7 +1072,7 @@ def make_pq_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation
     # plt.show()
     # plt.cla()
     # plt.close()
-    # plt.title("15ch_ch2")
+    # plt.title("16ch_ch2")
     # plt.plot(np.arange(0,0.8,0.002),PGV_datas[1],label="org")
     # plt.scatter(pt_array[0]*0.002,PGV_datas[1,pt_array[0]])
     # plt.plot(np.arange(0,0.8,0.002),new_PGV_data_400[1],label="augumentation")
@@ -1370,15 +1370,15 @@ def plot_augumentation_height(
     plt.cla()
     plt.close()
 
-    for i in range(15):
-        plt.title("15ch_ch{}".format(i))
+    for i in range(16):
+        plt.title("16ch_ch{}".format(i))
         plt.plot(np.arange(0, 0.8, 0.002), PGV_datas[i], label="org")
         plt.plot(np.arange(0, 0.8, 0.002), new_PGV_data_400[i], label="augumentation")
         plt.legend()
         plt.show()
         plt.cla()
         plt.close()
-    # plt.title("15ch_ch2")
+    # plt.title("16ch_ch2")
     # plt.plot(np.arange(0,0.8,0.002),PGV_datas[1],label="org")
     # plt.scatter(pt_array[0]*0.002,PGV_datas[1,pt_array[0]])
     # plt.plot(np.arange(0,0.8,0.002),new_PGV_data_400[1],label="augumentation")
@@ -1420,8 +1420,8 @@ def plot_augumentation(
     plt.show()
     plt.cla()
     plt.close()
-    for i in range(15):
-        plt.title("15ch_ch{}".format(i))
+    for i in range(16):
+        plt.title("16ch_ch{}".format(i))
         plt.plot(np.arange(0, 0.8, 0.002), PGV_datas[i], label="org")
         if augumentation == "pr":
             plt.scatter(pt_array[2] * 0.002, PGV_datas[i, pt_array[2]])
@@ -1592,8 +1592,8 @@ def get_unique_filename(base_filename, extension):
 
 
 # 例：基本ファイル名と拡張子を設定
-# for i in range(15):
-#     plt.title("15ch_ch{}".format(i))
+# for i in range(16):
+#     plt.title("16ch_ch{}".format(i))
 #     plt.plot(np.arange(0,0.8,0.002),PGV_datas[i],label="org")
 #     if(augumentation=="pr"):
 #         plt.scatter(pt_array[2]*0.002,PGV_datas[i,pt_array[2]])
@@ -1652,12 +1652,13 @@ def Dataset_setup_8ch_pt_augmentation(
         13,
         14,
         15,
-        18,
+        16,
         19,
         20,
         21,
+        22,
     ]
-    drop_col_mul = [0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    drop_col_mul = [0, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
     outputpeak_path = "peak_compare_{}".format(Dataset_name)
     os.makedirs(outputpeak_path, exist_ok=True)
     if ave_data_flg == 1:  # 平均心拍を利用する場合
@@ -1686,13 +1687,17 @@ def Dataset_setup_8ch_pt_augmentation(
                 data_ecg = data.drop(drop_col_ecg, axis=1)
                 sh_ecg = data_ecg.shape
                 data_ecg.columns = range(sh_ecg[1])
+                print(data)
+                print(path)
+                print(drop_col_mul)
+                print(data.columns)
 
                 data_mul = data.drop(drop_col_mul, axis=1)
                 sh_mul = data_mul.shape
                 data_mul.columns = range(sh_mul[1])
 
                 PGV_train = torch.FloatTensor(data_mul.T.values)
-                PGV_train = PGV_train.reshape(-1, 15, datalength)
+                PGV_train = PGV_train.reshape(-1, 16, datalength)
                 PGV_train = normalize_tensor_data(PGV_train)
 
                 # if(transform_type=="normal"):
@@ -1708,17 +1713,17 @@ def Dataset_setup_8ch_pt_augmentation(
 
                 # peaks_ecg=nk.ecg_peaks(xx2, 500)  # R波の位置を取得
                 # rpeaks_ecg=peaks_ecg[1]['ECG_R_Peaks']
-                # peaks_15ch=nk.ecg_peaks(yy, 500)  # R波の位置を取得
-                # rpeaks_15ch=peaks_15ch[1]['ECG_R_Peaks']
+                # peaks_16ch=nk.ecg_peaks(yy, 500)  # R波の位置を取得
+                # rpeaks_16ch=peaks_16ch[1]['ECG_R_Peaks']
                 # print(rpeaks_ecg)
-                # print(rpeaks_15ch)
-                # plt.plot(yy,label="15ch_ch1")
+                # print(rpeaks_16ch)
+                # plt.plot(yy,label="16ch_ch1")
                 # # plt.plot(xx,label="ECG_A1",color="r")
                 # plt.plot(xx2,label="ECG_A2",color="r")
-                # plt.scatter(rpeaks_15ch,yy[rpeaks_15ch],label="15ch_ch1_peak")
+                # plt.scatter(rpeaks_16ch,yy[rpeaks_16ch],label="16ch_ch1_peak")
                 # plt.scatter(rpeaks_ecg,xx2[rpeaks_ecg],label="ecg_A2_peak")
                 # plt.legend()
-                # plt.title(label_name+'ecgpeak={}_15chpeak={}'.format(rpeaks_ecg,rpeaks_15ch))
+                # plt.title(label_name+'ecgpeak={}_16chpeak={}'.format(rpeaks_ecg,rpeaks_16ch))
                 # # plt.show()
                 # plt.savefig(outputpeak_path+"/{}.png".format(label_name))
                 # plt.close()
@@ -1773,7 +1778,7 @@ def Dataset_setup_8ch_pt_augmentation(
                                 )
                             )
                             PGV_train_set.append(
-                                PGV_train_augment_data.view(1, 15, 400)
+                                PGV_train_augment_data.view(1, 16, 400)
                             )
                             ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
                             label_train_set.append(label_name_augment)
@@ -1833,7 +1838,7 @@ def Dataset_setup_8ch_pt_augmentation(
                                 extation_rate=extend_p_offset_rates[l],
                             )
                             PGV_train_set.append(
-                                PGV_train_augment_data.view(1, 15, 400)
+                                PGV_train_augment_data.view(1, 16, 400)
                             )
                             ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
                             label_train_set.append(label_name_augment)
@@ -1888,7 +1893,7 @@ def Dataset_setup_8ch_pt_augmentation(
                                 extation_rate=extend_t_offset_rates[l],
                             )
                             PGV_train_set.append(
-                                PGV_train_augment_data.view(1, 15, 400)
+                                PGV_train_augment_data.view(1, 16, 400)
                             )
                             ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
                             label_train_set.append(label_name_augment)
@@ -1946,7 +1951,7 @@ def Dataset_setup_8ch_pt_augmentation(
                                 extation_rate=extend_p_offset_rates[l],
                             )
                             PGV_train_set.append(
-                                PGV_train_augment_data.view(1, 15, 400)
+                                PGV_train_augment_data.view(1, 16, 400)
                             )
                             ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
                             label_train_set.append(label_name_augment)
@@ -2006,7 +2011,7 @@ def Dataset_setup_8ch_pt_augmentation(
                                 extation_rate=extend_t_offset_rates[l],
                             )
                             PGV_train_set.append(
-                                PGV_train_augment_data.view(1, 15, 400)
+                                PGV_train_augment_data.view(1, 16, 400)
                             )
                             ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
                             label_train_set.append(label_name_augment)
@@ -2053,7 +2058,7 @@ def Dataset_setup_8ch_pt_augmentation(
                 print("TARGET_NAME={}".format(Test_list[j]))
                 PGV_test = torch.FloatTensor(data_mul.T.values)
                 print(i)
-                PGV_test = PGV_test.reshape(-1, 15, datalength)
+                PGV_test = PGV_test.reshape(-1, 16, datalength)
                 PGV_test = normalize_tensor_data(PGV_test)
                 # if(transform_type=="normal"):#これは12ｎ誘導のP波T波の情報をつかってｋ埋めているから良くない⇒P波T波の位置を推論するｗモデルをつくるべき
                 # PGV_test = pt_extend(PGV_test.clone(), pt_array)
@@ -2175,21 +2180,21 @@ def Dataset_setup_8ch_pt_augmentation(
 #     plt.ylabel("number")
 #     plt.legend()
 #     plt.show()
-# Dataset_setup_12ch_pt_15ch_only(TARGET_NAME="osaka",transform_type='normal',Dataset_name='new_sensor_N=6_pt_8s',dataset_num=5)
+# Dataset_setup_12ch_pt_16ch_only(TARGET_NAME="osaka",transform_type='normal',Dataset_name='new_sensor_N=6_pt_8s',dataset_num=5)
 # train,test=Dataset_setup_12ch(TARGET_NAME="matumoto")
 # train,test=Dataset_setup_12ch(0,0)
-def Dataset_setup_15ch_only(
+def Dataset_setup_16ch_only(
     TARGET_NAME,
     transform_type,
     Dataset_name,
     dataset_num,
 ):
     """
-    推定のみで利用する、15チャネルのみのデータセットを作成する関数の例。
-    例）Dataset_setup_15ch_only(
+    推定のみで利用する、16チャネルのみのデータセットを作成する関数の例。
+    例）Dataset_setup_16ch_only(
             TARGET_NAME="osaka",
             transform_type=args.transform_type,
-            Dataset_name="15ch_only",
+            Dataset_name="16ch_only",
             dataset_num=3,
         )
 
@@ -2200,19 +2205,19 @@ def Dataset_setup_15ch_only(
     transform_type : str
         データセット生成時に行う変換や前処理の指定（"normal", "random" など）
     Dataset_name : str
-        ディレクトリ名。15ch のデータが格納されているフォルダ
+        ディレクトリ名。16ch のデータが格納されているフォルダ
     dataset_num : int
         1人(または1施設)あたりの CSV データ数 ( dataset_000.csv ~ dataset_{N}.csv )
 
     Returns
     -------
     train_dataset, test_dataset : torch.utils.data.Dataset
-        学習用/テスト用の 15 チャネルのみを格納したデータセット
+        学習用/テスト用の 16 チャネルのみを格納したデータセット
         （推論専用であれば、train_dataset を省略し test_dataset のみ返すなどでもOK）
     """
 
     datalength = 400
-    # 15ch の入力を格納
+    # 16ch の入力を格納
     PGV_train_set = []
     PGV_test_set = []
     label_train_set = []
@@ -2239,24 +2244,24 @@ def Dataset_setup_15ch_only(
         label_name = (
             replace_slash_with_underscore(TARGET_NAME) + f"_dataset{str(i).zfill(3)}"
         )
-        data_15ch = pd.read_csv(csv_path, header=None, skiprows=1)
+        data_16ch = pd.read_csv(csv_path, header=None, skiprows=1)
         # 先頭列の時間を削除
         drop_col = [0]
-        data_15ch = data_15ch.drop(drop_col, axis=1)
-        print(data_15ch)
+        data_16ch = data_16ch.drop(drop_col, axis=1)
+        print(data_16ch)
 
-        sh_15 = data_15ch.shape
-        data_15ch.columns = range(sh_15[1])
-        print(sh_15)
+        sh_16 = data_16ch.shape
+        data_16ch.columns = range(sh_16[1])
+        print(sh_16)
 
-        PGV_test = torch.FloatTensor(data_15ch.T.values)
-        PGV_test = PGV_test.reshape(-1, 15, datalength)
+        PGV_test = torch.FloatTensor(data_16ch.T.values)
+        PGV_test = PGV_test.reshape(-1, 16, datalength)
         PGV_test = normalize_tensor_data(PGV_test)
 
         PGV_test_set.append(PGV_test)
         label_test_set.append(label_name)
 
-    print("Finished loading 15ch data.")
+    print("Finished loading 16ch data.")
     print(f"Test samples: {len(PGV_test_set)}")
 
     # list -> tensor 結合
@@ -2271,9 +2276,9 @@ def Dataset_setup_15ch_only(
         PGV_test_set = torch.empty(0)
 
     # Dataset 化
-    # もし 15ch だけ扱う専用の Dataset クラスがあればそちらを使うのを推奨
+    # もし 16ch だけ扱う専用の Dataset クラスがあればそちらを使うのを推奨
     # 既存の MyDatasetX が (PGV, ECG, label) を想定している場合は ECG に None や空テンソルを渡すか、
-    # 15ch 専用クラスを作成してください。
+    # 16ch 専用クラスを作成してください。
     if transform_type == "random":
         test_dataset = MyDataset4(
             PGV_test_set,

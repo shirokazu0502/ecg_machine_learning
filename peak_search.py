@@ -125,7 +125,7 @@ class AutoIntegerFileHandler:
 
         data = {
             "INDEX": str(integer),
-            "TARGET_CH_15ch": str(target_15ch),
+            "TARGET_CH_16ch": str(target_15ch),
             "REVERSE": reverse,  # ピーク検出するときにTARGET_15chの波形を反転させるかどうかを決める。
             "TARGET_CH_12ch": str(target_12ch),
             "START_TIME": str(
@@ -138,7 +138,7 @@ class AutoIntegerFileHandler:
 
         column_order = [
             "INDEX",
-            "TARGET_CH_15ch",
+            "TARGET_CH_16ch",
             "REVERSE",
             "TARGET_CH_12ch",
             "START_TIME",
@@ -177,7 +177,7 @@ class AutoIntegerFileHandler:
             # input("posseeeeeeee")
             return (
                 int(data_dict["INDEX"]),
-                data_dict["TARGET_CH_15ch"],
+                data_dict["TARGET_CH_16ch"],
                 data_dict["REVERSE"],
                 data_dict["TARGET_CH_12ch"],
             )

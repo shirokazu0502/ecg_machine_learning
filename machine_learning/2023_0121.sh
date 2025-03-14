@@ -3,20 +3,21 @@
 # dataset_date="icce0120"
 # subject_group="2"
 # #腹部につけた時のデータ
-measure_names="yoshikura taniguchi kawai goto gosha patient1 patient4 patient6 patient8 patient9"
-measure_dates="1130 1107 1115 1219 0712 1001 1001 1001 1109 1109"
+measure_names="yoshikura taniguchi kawai goto gosha henmi2 kasahara patient1 patient4 patient6 patient8 patient9"
+measure_dates="1130 1107 1115 1219 0712 0304 0304 1001 1001 1001 1109 1109"
 # measure_names="matumoto yoshikura taniguchi kawai goto gosha"
 # measure_dates="1128 1130 1107 1115 1219 0712"
 # measure_names="patient4 patient6 patient8 patient9"
 # measure_dates="1001 1001 1109 1109"
-dataset_date="0218"
+dataset_date="0310"
 subject_group="1"
 ave_data_flg=0
 #再構成項のP波，R波,T波部分の重みを変更できる。
 P_weights="0.5 1.0"
 R_weights="0.001"
 T_weights="0.5 1.0"
-augumentation="st" #ST部分の延長短縮をするデータ拡張を行う。
+augumentation="" #ST部分の延長短縮をするデータ拡張を行う。
+ave_data_flg=1
 for P_weight in $P_weights; do
     for T_weight in $T_weights; do
         for R_weight in $R_weights; do

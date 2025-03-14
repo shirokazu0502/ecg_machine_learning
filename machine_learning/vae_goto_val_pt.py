@@ -55,7 +55,7 @@ from config.settings import (
     RAW_DATA_DIR,
     TEST_DIR,
     RATE,
-    RATE_15CH,
+    RATE_16CH,
     TIME,
     DATASET_MADE_DATE,
     OUTPUT_MAE_DIR,
@@ -231,8 +231,8 @@ def draw3d(
 #     chfilt = []
 #     for i in range(16):
 #         chfilt.append(hpf(lpf(ch[i], 125, fp=45, fs=50), 125, fp=3, fs=2)) #original
-#     mecg_flag = trans_tri(mecg_flag, 15) #パルス波を三角波に置き換える
-#     fecg_flag = trans_tri(fecg_flag, 15)
+#     mecg_flag = trans_tri(mecg_flag, 16) #パルス波を三角波に置き換える
+#     fecg_flag = trans_tri(fecg_flag, 16)
 
 #     timesnp = np.array(times)[X_LIM_MIN:X_LIM_MAX:DSRATE]
 
@@ -261,11 +261,11 @@ def draw3d(
 #     for i in range(int((len(timesnp) - datalength) / STEP)):
 #         numofdataset += 1
 #         # datastack = min_max(chnp[0][i * STEP:i * STEP + datalength], -1500, 1500)
-#         # for ch in range(15):
+#         # for ch in range(16):
 #         #     datastack = np.hstack((datastack, min_max(chnp[ch + 1][i * STEP:i * STEP + datalength], -1500, 1500)))
 #         #datastack = min_max_old(chnp[0][i * STEP:i * STEP + datalength])
 #         datastack = min_max(chnp[0][i * STEP:i * STEP + datalength], -400, 400) #正規化
-#         for ch in range(15):
+#         for ch in range(16):
 #             datastack = np.hstack((datastack, min_max(chnp[ch + 1][i * STEP:i * STEP + datalength], -400, 400))) #chを入れ替えない時#これは正規化の幅を決めてる？
 #         if datastack.max(axis=None, keepdims=True) != 0:
 #             datasetlist.append(datastack)
@@ -356,7 +356,7 @@ def plot_fig(numplotfig, recon_x, xo, datalength, ts, args, label_name, ecg_ch_n
             # print(xo.shape)
             # plt.plot(x[p].cpu().data.numpy()[0:datalength], color="green", linewidth=1.0, linestyle="-")
             # plt.plot(min_max_old(recon_x2[p][q].cpu().data.numpy()), color="red", linewidth=1.0, linestyle="-")
-            plt.rcParams["font.size"] = 15
+            plt.rcParams["font.size"] = 16
             plt.rcParams["xtick.direction"] = "in"
             plt.rcParams["ytick.direction"] = "in"
             # plt.plot(xticks,recon_x2[p][q].cpu().data.numpy(), color="0.1", linewidth=1.0, linestyle="-")
@@ -387,7 +387,7 @@ def plot_fig(numplotfig, recon_x, xo, datalength, ts, args, label_name, ecg_ch_n
                 ["predict", "ECG"],
                 bbox_to_anchor=(0.60, 1),
                 loc="upper left",
-                fontsize=15,
+                fontsize=16,
                 framealpha=1.0,
             )
             # plt.title(label_name[p])
@@ -574,7 +574,7 @@ def plot_fig_train_name(
             plt.close()
 
 
-def plot_fig_15ch_only(
+def plot_fig_16ch_only(
     recon_x, datalength, ts, args, batch_size_num, label_name, pt_index
 ):
     sample_rate = 500
@@ -640,7 +640,7 @@ def plot_fig_15ch_only(
                 os.path.join(
                     args.fig_root,
                     str(ts),
-                    "ch={}_15ch_only_test_x_xo_{}.png".format(
+                    "ch={}_16ch_only_test_x_xo_{}.png".format(
                         ecg_ch_names[q], label_name[p]
                     ),
                 ),
@@ -1951,7 +1951,7 @@ def main(args):
 
     print(vae)
     # input()
-    # summary(vae, input_size=(1,15 , 384))
+    # summary(vae, input_size=(1,16 , 384))
 
     if args.mode == "train":
         print("TRAINING MODE::\n")
@@ -1990,7 +1990,7 @@ def main(args):
                 train_data_loader
             ):
                 x, xo = x.to(device), xo.to(device)
-                x_check = torch.reshape(x, (-1, 15, args.datalength))
+                x_check = torch.reshape(x, (-1, 16, args.datalength))
                 recon_x, mean, log_var, z = vae(x)
                 # print(recon_x.shape)
                 # print(xo.shape)
@@ -2456,12 +2456,12 @@ def main(args):
         )
         write_to_csv(output_file, data=data_to_write)
 
-    elif args.mode == "15ch_only":
-        print("15ch_only MODE::\n")
-        test_dataset = Dataset.Dataset_setup_12ch_pt_15ch_only(
+    elif args.mode == "16ch_only":
+        print("16ch_only MODE::\n")
+        test_dataset = Dataset.Dataset_setup_12ch_pt_16ch_only(
             TARGET_NAME="osaka",
             transform_type=args.transform_type,
-            Dataset_name="15ch_only",
+            Dataset_name="16ch_only",
             dataset_num=3,
         )
         test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
@@ -2628,7 +2628,7 @@ def main(args):
                 print(z)
                 batch_size_now = len(label_name)
                 print(batch_size_now)
-                plot_fig_15ch_only(
+                plot_fig_16ch_only(
                     recon_x=recon_x,
                     datalength=datalength,
                     ts=ts,
@@ -2652,7 +2652,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0227_1930"
+    current_time = "0314_1530"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")
@@ -2661,7 +2661,7 @@ if __name__ == "__main__":
     parser.add_argument("--loss_pt_on_off_R_weight", type=float, default="")
     parser.add_argument("--loss_pt_on_off_P_weight", type=float, default="")
     parser.add_argument("--loss_pt_on_off_T_weight", type=float, default="")
-    parser.add_argument("--dataset_num", type=int, default=20)  # ICCEの際は15心拍分で
+    parser.add_argument("--dataset_num", type=int, default=20)  # ICCEの際は16心拍分で
 
     parser.add_argument("--TARGET_NAME", type=str, default="")
     # parser.add_argument("--dname", type = str ,default = "test")
@@ -2672,12 +2672,12 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--datalength", type=int, default=400)
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [32, 1], [64, 2]]) #畳み込み層の設定　増やしすぎると過学習の可能性　前から２ペアずつ読み込む　２つ目の[]の第二引数はストライド
-    # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[15, 1], [30, 2],[60, 2],[120, 2],[240,2]])#[[入力,ストライド],]
-    # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[15, 1], [30, 2],[60, 2],[120,2],[240,2]])#[[入力,ストライド],]
+    # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120, 2],[240,2]])#[[入力,ストライド],]
+    # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120,2],[240,2]])#[[入力,ストライド],]
     parser.add_argument(
         "--enc_convlayer_sizes",
         type=list,
-        default=[[15, 1], [30, 2]],
+        default=[[16, 1], [30, 2]],
     )  # [[入力,ストライド],]
     parser.add_argument(
         "--enc_fclayer_sizes", type=list, default=[6000, 500, 64]

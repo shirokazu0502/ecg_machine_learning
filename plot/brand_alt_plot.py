@@ -33,7 +33,7 @@ from config.settings import (
     RAW_DATA_DIR,
     TEST_DIR,
     RATE,
-    RATE_15CH,
+    RATE_16CH,
     TIME,
     DATASET_MADE_DATE,
 )
@@ -62,14 +62,18 @@ def plot_corr_and_bland_altman(csv_path, output_path):
         100,
     )
     axes[0].plot(x, x, label="y = x (correlation=1)", color="blue", linestyle="--")
-    axes[0].scatter(df["diff_15ch"], df["diff_lizmil"], label="Data Points", color="r")
+    axes[0].scatter(
+        df["diff_15ch"], df["diff_lizmil"], label="Data Points", color="r", alpha=0.2
+    )
     axes[0].set_title(f"RRI Scatter Plot\nCorrelation: {corr:.3f}")
     axes[0].set_xlabel("15ch_RRI")
     axes[0].set_ylabel("lizmil_RRI")
     axes[0].legend()
 
     # Bland-Altman プロット
-    axes[1].scatter(mean_BPM, RRI_diff, color="blue", label="BPM vs RRI Difference")
+    axes[1].scatter(
+        mean_BPM, RRI_diff, color="blue", label="BPM vs RRI Difference", alpha=0.2
+    )
     axes[1].set_title("Bland-Altman Plot")
     axes[1].set_xlabel("Mean BPM")
     axes[1].set_ylabel("RRI Difference")

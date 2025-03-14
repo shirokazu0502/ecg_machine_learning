@@ -18,7 +18,7 @@ from config.settings import (
     RAW_DATA_DIR,
     TEST_DIR,
     RATE,
-    RATE_15CH,
+    RATE_16CH,
     TIME,
     DATASET_MADE_DATE,
 )
