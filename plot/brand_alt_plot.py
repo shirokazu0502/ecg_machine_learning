@@ -100,7 +100,7 @@ def process_all_corr_csv(directory, patient_num):
     #     plot_corr_and_bland_altman(csv_file, output_path)
 
 
-patient_num = "patient9"
+patient_num = "patient1"
 directory = DATA_DIR + f"/RRI_plot/{patient_num}"  # CSVファイルがあるディレクトリを指定
 print(directory)
 process_all_corr_csv(directory, patient_num)

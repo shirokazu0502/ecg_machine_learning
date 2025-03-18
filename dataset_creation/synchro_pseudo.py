@@ -41,7 +41,7 @@ RATE_16CH = RATE_16CH
 TARGET_CHANNEL_12CH = "A2"
 TARGET_CHANNEL_16ch = validate_integer_input()
 reverse = "on"
-patient_number = "1"
+patient_number = "5"
 
 
 def PT_wave_search(ecg_all):

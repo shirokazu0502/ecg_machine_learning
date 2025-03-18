@@ -2652,7 +2652,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0314_1530"
+    current_time = "0318_1200_st_strerch"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")

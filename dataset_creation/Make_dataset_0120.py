@@ -2403,8 +2403,8 @@ def plot_and_select(ecg_all, rpeak, window=200):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    # plt.show()
-    # plt.close()
+    plt.show()
+    plt.close()
 
     # ユーザー入力
     while True:
@@ -3262,7 +3262,7 @@ if __name__ == "__main__":
     )
     args.TARGET_CHANNEL_12CH = "A2"
     args.cut_min_max_range = [0.0, 10000.0]
-    args.reverse = "off"
+    args.reverse = "on"
     args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.project_path='/home/cs28/share/goto/goto/ecg_project'
