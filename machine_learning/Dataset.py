@@ -1848,7 +1848,7 @@ def Dataset_setup_8ch_pt_augmentation(
                         else:
                             print(
                                 "extend_p_offset_rate:{} is not ablable".format(
-                                    str(extend_t_offset_rates[l])
+                                    str(extend_p_offset_rates[l])
                                 )
                             )
                             break

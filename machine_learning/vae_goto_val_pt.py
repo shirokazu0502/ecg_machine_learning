@@ -1848,6 +1848,11 @@ def main(args):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
+    # print(torch.cuda.get_device_name(0))  # GPUの名前を取得
+    # print(torch.cuda.device_count())  # 利用可能なGPUの数を取得
+    # print(torch.cuda.current_device())  # 現在選択されているGPUのIDを取得
+    # print(torch.cuda.memory_allocated())  # 現在使用中のGPUメモリ量（バイト単位）
+    # print(torch.cuda.memory_reserved())  # 確保済みのGPUメモリ量（バイト単位）
 
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
@@ -2367,7 +2372,7 @@ def main(args):
 
                 if (
                     args.loss_pt_on_off == "off"
-                ):  # 精度評価でptの範囲だけを計算するかどうか。offで０．８秒間全体を評価計算する。
+                ):  # 精度評価でptの範囲だけを計算するかどうか。offで0.8秒間全体を評価計算する。
                     test_val_12ch = cul_val_per_12ch_no_pt(acc_mae)
                 else:
                     test_val_12ch = cul_val_per_12ch(pt_index, acc_mae)
@@ -2652,7 +2657,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0318_1200_st_strerch"
+    current_time = "0329_1730_pr_strerch"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")

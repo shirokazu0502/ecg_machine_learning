@@ -13,23 +13,35 @@ dataset_date="0310"
 subject_group="1"
 ave_data_flg=0
 #再構成項のP波，R波,T波部分の重みを変更できる。
-P_weights="0.5 1.0"
-R_weights="0.001"
-T_weights="0.5 1.0"
-augumentation="st" #ST部分の延長短縮をするデータ拡張を行う。
+# P_weights="0.5 1.0"
+# R_weights="0.001"
+# T_weights="0.5 1.0"
+P_weight="0.010 1.000"
+R_weight="0.001 0.100"
+T_weight="0.010 1.000"
+
+augumentation="" #ST部分の延長短縮をするデータ拡張を行う。
 ave_data_flg=1
-for P_weight in $P_weights; do
-    for T_weight in $T_weights; do
-        for R_weight in $R_weights; do
-            for name in $measure_names; do
-                python3 vae_goto_val_pt.py --TARGET_NAME "$name" --epochs 500 --latent_size 10 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
-                python3 vae_goto_val_pt.py --TARGET_NAME "$name" --epochs 500 --latent_size 10 --beta 1 --mode zplot --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
-                python3 vae_goto_val_pt.py --TARGET_NAME "$name" --epochs 500 --latent_size 10 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
-            done
-            python3 output_data_pqrst_v3.py --dataset_date $dataset_date --names $measure_names --measure_dates $measure_dates ----subject_group "$subject_group" --dataset_ver "$dataset" --P_weight "$P_weight" --R_weight "$R_weight" --T_weight "$T_weight" --augumentation "$augumentation"
-        done
-    done
+# for P_weight in $P_weights; do
+#     for T_weight in $T_weights; do
+#         for R_weight in $R_weights; do
+#             for name in $measure_names; do
+#                 python3 vae_goto_val_pt.py --TARGET_NAME "$name" --epochs 500 --latent_size 10 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+#                 python3 vae_goto_val_pt.py --TARGET_NAME "$name" --epochs 500 --latent_size 10 --beta 1 --mode zplot --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+#                 python3 vae_goto_val_pt.py --TARGET_NAME "$name" --epochs 500 --latent_size 10 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+#             done
+#             python3 output_data_pqrst_v3.py --dataset_date $dataset_date --names $measure_names --measure_dates $measure_dates ----subject_group "$subject_group" --dataset_ver "$dataset" --P_weight "$P_weight" --R_weight "$R_weight" --T_weight "$T_weight" --augumentation "$augumentation"
+#         done
+#     done
+# done
+
+for name in $measure_names; do
+    python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 400 --latent_size 10 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+    python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 400 --latent_size 10 --beta 1 --mode zplot --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+    python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 400 --latent_size 10 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --augumentation "$augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
 done
+# python3 output_data_pqrst_v3.py --dataset_date $dataset_date --names $measure_names --measure_dates $measure_dates ----subject_group "$subject_group" --dataset_ver "$dataset" --P_weight "$P_weight" --R_weight "$R_weight" --T_weight "$T_weight" --augumentation "$augumentation"
+
 
 """
 augumentation="st" #ST部分の延長短縮をするデータ拡張を行う。
