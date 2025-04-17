@@ -769,15 +769,21 @@ def normalize_tensor_data(tensor):
 
     normalized_data = torch.zeros_like(tensor)
     # print(in_data.shape)
-    for i in range(num_data):
-        time_data = tensor[i]
-        max_val = torch.max(time_data)
-        min_val = torch.min(time_data)
-        val = max(abs(max_val), abs(min_val))
+    # チャネルごとの正規化
+    # for i in range(num_data):
+    #     time_data = tensor[i]
+    #     max_val = torch.max(time_data)
+    #     min_val = torch.min(time_data)
+    #     val = max(abs(max_val), abs(min_val))
 
-        normalized_data_tmp = 0.5 * (time_data / val) + 0.5
-        # normalized_data_tmp=(time_data-min_val)/(max_val - min_val)
-        normalized_data[i, :, :] = normalized_data_tmp
+    #     normalized_data_tmp = 0.5 * (time_data / val) + 0.5
+    #     # normalized_data_tmp=(time_data-min_val)/(max_val - min_val)
+    #     normalized_data[i, :, :] = normalized_data_tmp
+
+    # 全データ・全チャネルにおける最大絶対値を計算
+    global_max_val = torch.max(torch.abs(tensor))
+
+    normalized_data = 0.5 * (tensor / global_max_val) + 0.5
     # plt.plot(in_data[0][0])
     # plt.show()
     # print(in_data.shape)

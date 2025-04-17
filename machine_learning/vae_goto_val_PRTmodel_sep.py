@@ -1149,8 +1149,8 @@ def loss_fn_mse_PRT(
         index2 = S_peaks[i]
         # print(index1)
         # print(index2)
-        index1 = 190  # 　一旦はこれでやらせてみる 0401
-        index2 = 210
+        index1 = 170  # 　一旦はこれでやらせてみる 0401
+        index2 = 230
         recon_x_before_R1 = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, :index1]
         recon_x_after_R2 = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, index2:]
         x_before_R1 = x.view(-1, args.ecg_ch_num, datalength)[i, :, :index1]
@@ -2730,7 +2730,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0403_1610_prt_sep"
+    current_time = "0412_1750_z10"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--augumentation", type=str, default="")

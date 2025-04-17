@@ -39,9 +39,9 @@ RATE = 500.00
 RATE_12ch = 500.00
 RATE_16CH = RATE_16CH
 TARGET_CHANNEL_12CH = "A2"
-TARGET_CHANNEL_16ch = validate_integer_input()
+TARGET_CHANNEL_16ch = "ch_1"
 reverse = "on"
-patient_number = "5"
+patient_number = "2"
 
 
 def PT_wave_search(ecg_all):
@@ -152,8 +152,8 @@ def main(args):
     # input()
     peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
     # 16chと12chのデータ同期
-    for i, (sc15, sc12) in enumerate(zip(sc_16ch[0], sc_12ch[0])):
-        center_16ch_idx = int(sc15 * RATE)
+    for i, (sc_16ch, sc12) in enumerate(zip(sc_16ch[0], sc_12ch[0])):
+        center_16ch_idx = int(sc_16ch * RATE)
         start_16ch_idx = int(center_16ch_idx - 0.4 * RATE)
         end_16ch_idx = int(center_16ch_idx + 0.4 * RATE)
         heartbeat_16ch = df_16ch_cleaned.iloc[start_16ch_idx:end_16ch_idx]

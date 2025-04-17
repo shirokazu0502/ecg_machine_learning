@@ -42,6 +42,8 @@ from config.settings import (
 def plot_corr_and_bland_altman(csv_path, output_path):
     # CSVファイルを読み込む
     df = pd.read_csv(csv_path)
+    # 半分のみに削減
+    df = df.iloc[: len(df) // 2]
 
     # 15chとlizmilのRRIの差分を計算
     RRI_diff = df["diff_15ch"] - df["diff_lizmil"]
@@ -91,7 +93,7 @@ def plot_corr_and_bland_altman(csv_path, output_path):
 
 def process_all_corr_csv(directory, patient_num):
     merge_df_path = f"{directory}/{patient_num}_merge_df.csv"
-    output_path = merge_df_path.replace(".csv", ".png")
+    output_path = merge_df_path.replace(".csv", ".svg")
     plot_corr_and_bland_altman(merge_df_path, output_path)
     # csv_files = glob.glob(f"{directory}/*_corr*.csv")
     # for csv_file in csv_files:
@@ -100,7 +102,7 @@ def process_all_corr_csv(directory, patient_num):
     #     plot_corr_and_bland_altman(csv_file, output_path)
 
 
-patient_num = "patient1"
+patient_num = "patient5"
 directory = DATA_DIR + f"/RRI_plot/{patient_num}"  # CSVファイルがあるディレクトリを指定
 print(directory)
 process_all_corr_csv(directory, patient_num)

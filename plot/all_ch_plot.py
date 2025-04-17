@@ -21,6 +21,7 @@ dataset_input_path = (
         dataset_made_date, peak_method, name, date
     )
 )
+# dataset_input_path = PROCESSED_DATA_DIR + "/synchro_data/patient5"
 # dataset_input_path = RAW_DATA_DIR + "/takahashi_test/{}/{}_{}_0/0".format(
 #     dataset_made_date, peak_method, name, date
 # )
