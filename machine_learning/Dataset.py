@@ -846,7 +846,7 @@ def make_p_onset_extension_datas(
     PGV_datas, ECG_datas, pt_array, label_name, extation_rate
 ):
     p_offset_org = pt_array[2]
-    r_onset = 190
+    r_onset = 170
     # print(ECG_datas)
     extation_range_ECG = ECG_datas[:, p_offset_org:r_onset]
     extation_range_PGV = PGV_datas[:, p_offset_org:r_onset]
@@ -911,7 +911,7 @@ def make_p_onset_extension_datas(
     # plt.title("ECG_A2+augmentation_rate={}".format(extation_rate))
     # plt.plot(np.arange(0,0.8,0.002),ECG_datas[1],label="org")
     # plt.scatter(pt_array[2]*0.002,ECG_datas[1,pt_array[2]])
-    # plt.axvline(x=190*0.002,color='black',linewidth=2,linestyle='--')
+    # plt.axvline(x=170*0.002,color='black',linewidth=2,linestyle='--')
     # plt.plot(np.arange(0,0.8,0.002),new_ECG_data_400[1],label="augumentation")
     # plt.scatter(pt_array_augumentation[2]*0.002,new_ECG_data_400[1,pt_array_augumentation[2]])
     # # plt.scatter(pt_array_augumentation[0]*0.002,new_ECG_data_400[1,pt_array_augumentation[0]])
@@ -938,7 +938,7 @@ def make_t_onset_extension_datas(
     PGV_datas, ECG_datas, pt_array, label_name, extation_rate
 ):
     t_onset_org = pt_array[3]
-    r_offset = 210
+    r_offset = 230
     extation_range_ECG = ECG_datas[:, r_offset:t_onset_org]
     extation_range_PGV = PGV_datas[:, r_offset:t_onset_org]
     new_extation_range_ECG, new_extation_range_PGV = linear_interpolation_All(
@@ -1002,7 +1002,7 @@ def make_t_onset_extension_datas(
 def make_pq_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
     p_offset_org = pt_array[2]
     q_peak = pt_array[5]
-    # r_onset=190
+    # r_onset=170
     # print(ECG_datas)
     extation_range_ECG = ECG_datas[:, p_offset_org:q_peak]
     extation_range_PGV = PGV_datas[:, p_offset_org:q_peak]
@@ -1070,7 +1070,7 @@ def make_pq_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation
     # plt.title("ECG_A2+augmentation_rate={}".format(extation_rate))
     # plt.plot(np.arange(0,0.8,0.002),ECG_datas[1],label="org")
     # plt.scatter(pt_array[2]*0.002,ECG_datas[1,pt_array[2]])
-    # plt.axvline(x=190*0.002,color='black',linewidth=2,linestyle='--')
+    # plt.axvline(x=170*0.002,color='black',linewidth=2,linestyle='--')
     # plt.plot(np.arange(0,0.8,0.002),new_ECG_data_400[1],label="augumentation")
     # plt.scatter(pt_array_augumentation[2]*0.002,new_ECG_data_400[1,pt_array_augumentation[2]])
     # # plt.scatter(pt_array_augumentation[0]*0.002,new_ECG_data_400[1,pt_array_augumentation[0]])
@@ -1164,7 +1164,7 @@ def make_st_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation
 # def make_t_height_extation(PGV_datas,ECG_datas,pt_array,label_name,extation_rate):
 #     t_onset_org=pt_array[3]
 #     t_offset_org=pt_array[1]
-#     r_offset=210
+#     r_offset=230
 #     base_lines_tensor_ECG=ECG_datas[:,pt_array[0]]
 #     base_lines_tensor_PGV=PGV_datas[:,pt_array[0]]
 #     extation_range_ECG=ECG_datas[:,t_onset_org:t_offset_org]
@@ -1200,10 +1200,46 @@ def sin_wave(point_num, extation_rate):
     return y
 
 
+def make_p_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
+    p_onset_org = pt_array[2]
+    p_offset_org = pt_array[0]
+    base_lines_tensor_ECG = ECG_datas[:, pt_array[0]]
+    base_lines_tensor_PGV = PGV_datas[:, pt_array[0]]
+    extation_range_ECG = ECG_datas[:, p_onset_org:p_offset_org]
+    extation_range_PGV = PGV_datas[:, p_onset_org:p_offset_org]
+    point_num = p_offset_org - p_onset_org
+    extation_rate_sin = torch.tensor(sin_wave(point_num, extation_rate=extation_rate))
+    extation_rate_sin = extation_rate_sin.float()
+    new_extation_range_ECG = (
+        extation_range_ECG - base_lines_tensor_ECG.view(ECG_datas.shape[0], 1)
+    ) * extation_rate_sin + base_lines_tensor_ECG.view(ECG_datas.shape[0], 1)
+    new_extation_range_PGV = (
+        extation_range_PGV - base_lines_tensor_PGV.view(PGV_datas.shape[0], 1)
+    ) * extation_rate_sin + base_lines_tensor_PGV.view(PGV_datas.shape[0], 1)
+    new_ECG_data = torch.concat(
+        [
+            ECG_datas[:, :p_onset_org],
+            new_extation_range_ECG,
+            ECG_datas[:, p_offset_org:],
+        ],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [
+            PGV_datas[:, :p_onset_org],
+            new_extation_range_PGV,
+            PGV_datas[:, p_offset_org:],
+        ],
+        dim=1,
+    )
+    new_label_name = label_name + str(extation_rate)
+    return new_ECG_data, new_PGV_data, new_label_name, pt_array
+
+
 def make_t_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
     t_onset_org = pt_array[3]
     t_offset_org = pt_array[1]
-    r_offset = 210
+    r_offset = 230
     base_lines_tensor_ECG = ECG_datas[:, pt_array[0]]
     base_lines_tensor_PGV = PGV_datas[:, pt_array[0]]
     extation_range_ECG = ECG_datas[:, t_onset_org:t_offset_org]
@@ -1408,14 +1444,14 @@ def plot_augumentation(
     plt.plot(np.arange(0, 0.8, 0.002), ECG_datas[1], label="org")
     if augumentation == "pr":
         plt.scatter(pt_array[2] * 0.002, ECG_datas[1, pt_array[2]])
-        plt.axvline(x=190 * 0.002, color="black", linewidth=2, linestyle="--")
+        plt.axvline(x=170 * 0.002, color="black", linewidth=2, linestyle="--")
         plt.scatter(
             pt_array_augumentation[2] * 0.002,
             new_ECG_data_400[1, pt_array_augumentation[2]],
         )
     if augumentation == "rt":
         plt.scatter(pt_array[3] * 0.002, ECG_datas[1, pt_array[3]])
-        plt.axvline(x=210 * 0.002, color="black", linewidth=2, linestyle="--")
+        plt.axvline(x=230 * 0.002, color="black", linewidth=2, linestyle="--")
         plt.scatter(
             pt_array_augumentation[3] * 0.002,
             new_ECG_data_400[1, pt_array_augumentation[3]],
@@ -1462,8 +1498,8 @@ def plot_augumentation_v2(
     # plt.plot(np.arange(0,0.8,0.002),ECG_datas[1],label="Original waveform")
     plt.plot(np.arange(0, 0.8, 0.002), ECG_datas[1], label="Waveform before extension")
     plt.xlim(0, 0.8)
-    # plt.axvline(x=190*0.002,color='red',linewidth=2,linestyle='--')
-    # plt.axvline(x=210*0.002,color='red',linewidth=2,linestyle='--')
+    # plt.axvline(x=170*0.002,color='red',linewidth=2,linestyle='--')
+    # plt.axvline(x=230*0.002,color='red',linewidth=2,linestyle='--')
     # plt.axvline(x=pt_array[5]*0.002,color='red',linewidth=2,linestyle='--')
     # plt.axvline(x=pt_array[6]*0.002,color='red',linewidth=2,linestyle='--')
     plt.legend(loc="upper left", fontsize=8)
@@ -1743,10 +1779,10 @@ def Dataset_setup_8ch_pt_augmentation(
                 pt_train_set.append(pt_array)
 
                 if (
-                    DataAugumentation == "height"
-                    or DataAugumentation == "rt_and_height"
-                ):  # P_offsetからR_onsetを延長するデータ拡張
-                    r_offset = 210  #
+                    DataAugumentation == "rt_and_height"
+                    or DataAugumentation == "st_and_height"
+                ):  # T波の高さを変えるデータ拡張
+                    r_offset = 230  #
                     t_offset = pt_array[1]
                     t_onset = pt_array[3]
                     extend_t_height_rates = [
@@ -1804,9 +1840,68 @@ def Dataset_setup_8ch_pt_augmentation(
                             # input("")
                             break
 
-                if DataAugumentation == "pr":  # P_offsetからR_onsetを延長するデータ拡張
-                    # r_offset=210#
-                    r_onset = 190
+                if DataAugumentation == "pr_and_height":  # P波の高さを変えるデータ拡張
+                    p_onset = pt_array[0]
+                    p_offset = pt_array[2]
+                    extend_p_height_rates = [
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.1,
+                        1.2,
+                        1.3,
+                        1.4,
+                        1.5,
+                    ]
+                    for l in range(len(extend_p_height_rates)):
+                        # check_value=(datalength-t_offset)/(t_onset-r_offset)#ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        (
+                            ECG_train_augment_data,
+                            PGV_train_augment_data,
+                            label_name_augment,
+                            pt_array_augument,
+                        ) = make_t_height_extation(
+                            PGV_train[0],
+                            ECG_train[0],
+                            pt_array,
+                            label_name,
+                            extation_rate=extend_p_height_rates[l],
+                        )
+                        check_bool_ECG = (ECG_train_augment_data > 1).any().item()
+                        check_bool_PGV = (PGV_train_augment_data > 1).any().item()
+                        if check_bool_ECG == False and check_bool_PGV == False:
+                            print(
+                                "extend_t_offset_rate:{} is ablable".format(
+                                    str(extend_p_height_rates[l])
+                                )
+                            )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 16, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_t_height_rate:{} is not ablable".format(
+                                    str(extend_t_offset_rates[l])
+                                )
+                            )
+                            print(
+                                "name:{},heartbeat_num={}extation_rate={}".format(
+                                    TARGET_NAME, str(i), str(l)
+                                )
+                            )
+                            # input("")
+                            break
+                if (
+                    DataAugumentation == "pr" or DataAugumentation == "pr_and_height"
+                ):  # P_offsetからR_onsetを延長するデータ拡張
+                    # r_offset=230#
+                    r_onset = 170
                     p_onset = pt_array[0]
                     p_offset = pt_array[2]
                     extend_p_offset_rates = [
@@ -1861,7 +1956,7 @@ def Dataset_setup_8ch_pt_augmentation(
                 if (
                     DataAugumentation == "rt" or DataAugumentation == "rt_and_height"
                 ):  # P_onsetからR_onsetを延長するデータ拡張
-                    r_offset = 210  #
+                    r_offset = 230  #
                     t_offset = pt_array[1]
                     t_onset = pt_array[3]
                     extend_t_offset_rates = [

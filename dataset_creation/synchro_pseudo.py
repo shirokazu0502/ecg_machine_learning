@@ -17,6 +17,7 @@ from Make_dataset_0120 import (
     calculate_moving_average,
 )
 from glob import glob
+from scipy import signal
 from scipy.ndimage import uniform_filter1d, median_filter
 import numpy as np
 import pandas as pd
@@ -109,6 +110,54 @@ def output_csv_eles(
     }
     data_out = pd.DataFrame(data)
     data_out.to_csv(file_path + "/" + file_name, index=None)
+
+
+def clean_ecg_signal(
+    ecg_signal,
+    sampling_rate=500,
+    bandpass_lowcut=0.05,
+    bandpass_highcut=100,
+    notch_freq=50,
+    notch_Q=30,
+):
+    """
+    ECG信号をバンドパスフィルタとノッチフィルタで前処理する関数
+
+    Parameters:
+    ----------
+    ecg_signal : array-like
+        入力する生のECG信号
+    sampling_rate : int, optional
+        サンプリング周波数（Hz）
+    bandpass_lowcut : float, optional
+        バンドパスフィルタの下限周波数（Hz）
+    bandpass_highcut : float, optional
+        バンドパスフィルタの上限周波数（Hz）
+    notch_freq : float, optional
+        ノッチフィルタの中心周波数（Hz）
+    notch_Q : float, optional
+        ノッチフィルタのQ値（フィルタの鋭さ）
+
+    Returns:
+    -------
+    filtered_ecg : array-like
+        フィルタ後のECG信号
+    """
+
+    # --- バンドパスフィルタ ---
+    nyquist = sampling_rate / 2
+    low = bandpass_lowcut / nyquist
+    high = bandpass_highcut / nyquist
+
+    b_bandpass, a_bandpass = signal.butter(N=4, Wn=[low, high], btype="band")
+    filtered_ecg = signal.filtfilt(b_bandpass, a_bandpass, ecg_signal)
+
+    # --- ノッチフィルタ ---
+    w0 = notch_freq / nyquist
+    b_notch, a_notch = signal.iirnotch(w0=w0, Q=notch_Q)
+    filtered_ecg = signal.filtfilt(b_notch, a_notch, filtered_ecg)
+
+    return filtered_ecg
 
 
 def main(args):
@@ -213,9 +262,7 @@ def main(args):
         t_peak = None
         for j, column in enumerate(data.columns):
             # フィルタかける
-            data[column] = nk.ecg_clean(
-                data[column], sampling_rate=500, method="neurokit"
-            )
+            data[column] = clean_ecg_signal(data[column])
             # pt_extendを実施
             # インデックスp_onsetの値を取得
             print(data)

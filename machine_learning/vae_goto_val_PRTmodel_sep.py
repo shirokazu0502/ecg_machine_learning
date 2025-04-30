@@ -1858,16 +1858,49 @@ def main(args):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
-        TARGET_NAME=args.TARGET_NAME,
-        transform_type=args.transform_type,
-        Dataset_name=args.Dataset_name,
-        dataset_num=args.dataset_num,
-        DataAugumentation=args.augumentation,
-        ave_data_flg=args.ave_data_flg,
+    # PからTまでそれぞれにおけるデータセット作成
+    train_dataset_dict = {}
+    test_dataset_dict = {}
+    train_dataset_dict["P_train_dataset"], test_dataset_dict["P_test_dataset"] = (
+        Dataset.Dataset_setup_8ch_pt_augmentation(
+            TARGET_NAME=args.TARGET_NAME,
+            transform_type=args.transform_type,
+            Dataset_name=args.Dataset_name,
+            dataset_num=args.dataset_num,
+            DataAugumentation=args.p_augumentation,
+            ave_data_flg=args.ave_data_flg,
+        )
     )
-    print("len(train_dataset)")
-    print(len(train_dataset))
+    train_dataset_dict["R_train_dataset"], test_dataset_dict["R_test_dataset"] = (
+        Dataset.Dataset_setup_8ch_pt_augmentation(
+            TARGET_NAME=args.TARGET_NAME,
+            transform_type=args.transform_type,
+            Dataset_name=args.Dataset_name,
+            dataset_num=args.dataset_num,
+            DataAugumentation=args.r_augumentation,
+            ave_data_flg=args.ave_data_flg,
+        )
+    )
+    train_dataset_dict["T_train_dataset"], test_dataset_dict["T_test_dataset"] = (
+        Dataset.Dataset_setup_8ch_pt_augmentation(
+            TARGET_NAME=args.TARGET_NAME,
+            transform_type=args.transform_type,
+            Dataset_name=args.Dataset_name,
+            dataset_num=args.dataset_num,
+            DataAugumentation=args.t_augumentation,
+            ave_data_flg=args.ave_data_flg,
+        )
+    )
+    # 最終的にテストを行うためのデータセット(本質的にはどれも同じなので適当にR波を採用)
+    all_test_dataset = test_dataset_dict["R_test_dataset"]
+    # train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
+    #     TARGET_NAME=args.TARGET_NAME,
+    #     transform_type=args.transform_type,
+    #     Dataset_name=args.Dataset_name,
+    #     dataset_num=args.dataset_num,
+    #     DataAugumentation=args.p_augumentation,
+    #     ave_data_flg=args.ave_data_flg,
+    # )
     print("gotooooooooooo_end")
     # ==================================================================
     # ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d_%H%M%S')
@@ -1896,7 +1929,11 @@ def main(args):
         + "PRT="
         + PRT_weight
         + "_augument="
-        + args.augumentation
+        + args.p_augumentation
+        + "_"
+        + args.r_augumentation
+        + "_"
+        + args.t_augumentation
     )
 
     if not os.path.exists(os.path.join(args.fig_root, str(ts))):
@@ -1934,12 +1971,6 @@ def main(args):
     STEP = 1
     DSRATE = 1
 
-    print(len(train_dataset))
-    print(len(train_dataset[5]))
-    print("fdfdfdfed")
-    print(train_dataset[0][3])
-    print(train_dataset[0][2])
-
     # input()
     # summary(vae, input_size=(1,16 , 384))
     common_kwargs = {
@@ -1964,11 +1995,9 @@ def main(args):
         # val_size = len(dataset) - train_size
         # val_size = 1
         # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-        train_data_loader = DataLoader(
-            dataset=train_dataset, batch_size=args.train_batch_size, shuffle=True
-        )
-        # dataset=train_dataset, batch_size=args.train_batch_size, shuffle=False)
-        test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+        # train_data_loader = DataLoader(
+        #     dataset=train_dataset, batch_size=args.train_batch_size, shuffle=True
+        # )
         weights = {
             "P": args.loss_pt_on_off_P_weight,
             "R": args.loss_pt_on_off_R_weight,
@@ -1982,6 +2011,20 @@ def main(args):
                 current_weight[weight_key] = (
                     float(right) if target_weight == weight_key else float(left)
                 )
+            train_data_loader = DataLoader(
+                dataset=train_dataset_dict[f"{target_weight}_train_dataset"],
+                batch_size=args.train_batch_size,
+                shuffle=True,
+            )
+
+            # test_loader = DataLoader(
+            #     f"{target_weight}_test_dataset", batch_size=4, shuffle=False
+            # )
+            test_loader = DataLoader(
+                test_dataset_dict[f"{target_weight}_test_dataset"],
+                batch_size=4,
+                shuffle=False,
+            )
             vae = vae_dict[target_weight]
             print(vae)
             optimizer = torch.optim.Adam(vae.parameters(), lr=args.learning_rate)
@@ -2001,7 +2044,6 @@ def main(args):
                 kdl_keep = 0.0
                 acc_keep = 0.0
 
-                print(len(train_data_loader))
                 print("loader")
                 for iteration, (x, xo, label_name, pt_index) in enumerate(
                     train_data_loader
@@ -2342,8 +2384,7 @@ def main(args):
 
     elif args.mode == "test":
         print("TEST MODE::\n")
-        test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
-        print(len(test_dataset))
+        test_loader = DataLoader(all_test_dataset, batch_size=4, shuffle=False)
         print("aaaaaaaaaaaaaaaaaa")
         print(test_loader)
         # input()
@@ -2529,7 +2570,9 @@ def main(args):
                 str(args.loss_pt_on_off_P_weight),
                 str(args.loss_pt_on_off_R_weight),
                 str(args.loss_pt_on_off_T_weight),
-                args.augumentation,
+                args.p_augumentation,
+                args.r_augumentation,
+                args.t_augumentation,
             )
         )
         write_to_csv(output_file, data=data_to_write)
@@ -2730,10 +2773,13 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0412_1750_z10"
+    current_time = "0422_1110_z10_notpatient_nonuse_height"
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--augumentation", type=str, default="")
+    # parser.add_argument("--augumentation", type=str, default="")
+    parser.add_argument("--p_augumentation", type=str, default="")
+    parser.add_argument("--r_augumentation", type=str, default="")
+    parser.add_argument("--t_augumentation", type=str, default="")
     parser.add_argument("--Dataset_name", type=str, default="")
     parser.add_argument("--loss_pt_on_off", type=str, default="off")
     parser.add_argument("--loss_pt_on_off_R_weight", type=str, default="")
