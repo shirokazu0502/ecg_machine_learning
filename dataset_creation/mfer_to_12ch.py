@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # args.date='0418'
     args.name, args.date = select_name_and_date()
 
-    args.pos = "0"  # 0なら胸,1なら腹,2なら腰
+    args.pos = "back"  # 0なら胸,1なら腹,2なら腰
     args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.test_images_path_12lead='./0_packetloss_data_{}/{}/'.format(DATASET_MADE_DATE,args.name)

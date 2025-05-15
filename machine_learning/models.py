@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-CHANNEL = 16
+CHANNEL = 15
 
 
 def idx2onehot(idx, n):

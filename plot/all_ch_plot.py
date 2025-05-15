@@ -17,7 +17,7 @@ peak_method = "cwt"
 dataset_made_date = DATASET_MADE_DATE
 dataset_input_path = (
     PROCESSED_DATA_DIR
-    + "/pqrst_nkmodule_since{}_{}/{}_{}_0.8s/0".format(
+    + "/pqrst_nkmodule_since{}_{}/{}_{}_0.8s/0/ch_1_base".format(
         dataset_made_date, peak_method, name, date
     )
 )

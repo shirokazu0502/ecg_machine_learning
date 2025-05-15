@@ -2666,7 +2666,7 @@ if __name__ == "__main__":
     parser.add_argument("--loss_pt_on_off_R_weight", type=float, default="")
     parser.add_argument("--loss_pt_on_off_P_weight", type=float, default="")
     parser.add_argument("--loss_pt_on_off_T_weight", type=float, default="")
-    parser.add_argument("--dataset_num", type=int, default=20)  # ICCEの際は16心拍分で
+    parser.add_argument("--dataset_num", type=int, default=30)  # ICCEの際は16心拍分で
 
     parser.add_argument("--TARGET_NAME", type=str, default="")
     # parser.add_argument("--dname", type = str ,default = "test")

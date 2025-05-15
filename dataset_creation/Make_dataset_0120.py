@@ -2848,6 +2848,7 @@ def PTwave_search3(
                     args.dataset_output_path
                     + "/"
                     + args.output_filepath
+                    + "/ch_1_base"
                     + "/pt_manual_setting.xlsx",
                 )
                 print("pt_manual_setting", pt_manual_setting)
@@ -3190,31 +3191,115 @@ def main(args):
     df_16ch = csv_reader_16ch.process_files()
     print(df_16ch)
     cols = df_16ch.columns
-    df_15ch = pd.DataFrame()
     # 15chのうちマイナスを取るchを1,4,13,16に順番に設定
     base_channels = ["ch_1", "ch_4", "ch_13", "ch_16"]
+    # 各 base_channel に対応する比較対象チャンネルを定義
+    channel_map = {
+        "ch_1": [
+            "ch_2",
+            "ch_3",
+            "ch_4",
+            "ch_5",
+            "ch_6",
+            "ch_7",
+            "ch_8",
+            "ch_9",
+            "ch_10",
+            "ch_11",
+            "ch_12",
+            "ch_13",
+            "ch_14",
+            "ch_15",
+            "ch_16",
+        ],
+        "ch_4": [
+            "ch_8",
+            "ch_12",
+            "ch_16",
+            "ch_3",
+            "ch_7",
+            "ch_11",
+            "ch_15",
+            "ch_2",
+            "ch_6",
+            "ch_10",
+            "ch_14",
+            "ch_1",
+            "ch_5",
+            "ch_9",
+            "ch_13",
+        ],
+        "ch_13": [
+            "ch_9",
+            "ch_5",
+            "ch_1",
+            "ch_14",
+            "ch_10",
+            "ch_6",
+            "ch_2",
+            "ch_15",
+            "ch_11",
+            "ch_7",
+            "ch_3",
+            "ch_16",
+            "ch_12",
+            "ch_8",
+            "ch_4",
+        ],
+        "ch_16": [
+            "ch_15",
+            "ch_14",
+            "ch_13",
+            "ch_12",
+            "ch_11",
+            "ch_10",
+            "ch_9",
+            "ch_8",
+            "ch_7",
+            "ch_6",
+            "ch_5",
+            "ch_4",
+            "ch_3",
+            "ch_2",
+            "ch_1",
+        ],
+    }
     for base_ch in base_channels:
+        df_15ch = pd.DataFrame()
         for col in cols:
             df_15ch[col] = df_16ch[col] - df_16ch[base_ch]
         df_15ch = df_15ch.drop(columns=[base_ch])
+        # 列の並び替え
+        df_15ch = df_15ch[channel_map[base_ch]]
         print("yoihsho")
+        print(df_15ch.columns)
+        # time.sleep(100)
         print(base_ch)
         # 同期用インデックスファイルを読み込みと書き込み
         handler = AutoIntegerFileHandler(dir_path + "/同期インデックス_nkmodule.txt")
         if base_ch == "ch_1":
             check_flg = handler.check_file()
+            if args.reverse == "on":
+                reverse = "off"
+            else:
+                reverse = "on"
+            TARGET_CHANNEL_15ch = "ch_16"
+        else:
+            check_flg = True
+            reverse = args.reverse
+            TARGET_CHANNEL_15ch = "ch_1"
         if check_flg == False:  # 同期するためのファイルが存在していないとき。
             print("TARGET_CHNNEL_16chは")
             # TARGET_CHANNEL_16ch = validate_integer_input()
-            if base_ch == "ch_1":
-                if args.reverse == "on":
-                    reverse = "off"
-                else:
-                    reverse = "on"
-                TARGET_CHANNEL_15ch = "ch_16"
-            else:
-                reverse = args.reverse
-                TARGET_CHANNEL_15ch = "ch_1"
+            # if base_ch == "ch_1":
+            #     if args.reverse == "on":
+            #         reverse = "off"
+            #     else:
+            #         reverse = "on"
+            #     TARGET_CHANNEL_15ch = "ch_16"
+            # else:
+            #     reverse = args.reverse
+            #     TARGET_CHANNEL_15ch = "ch_1"
             # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=2.0,HPF_fs=1.0,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
             # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=HPF_FP,HPF_fs=HPF_FS,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
             df_15ch_pf = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=RATE_15CH)
@@ -3287,45 +3372,48 @@ def main(args):
         syn_index, TARGET_CHANNEL_15ch, reverse, TARGET_CHANNEL_12CH = (
             handler.read_integer()
         )  # 同期するインデックス
+        if base_ch == "ch_16":
+            TARGET_CHANNEL_15ch = "ch_1"
         print(syn_index)
         # if(target_ch!=TARGET_CHANNEL_15ch):
         #     print("target_ch!=args.TARGE_CHSNNEL_15ch")
         #     print("target_ch"+target_ch)
         #     return 0
         # input("15ch_pf")
-        if DEBUG_PLOT == True:
-            if reverse == "off":
-                sc_15ch_pf = peak_sc_15ch(
-                    df_resample_15ch[syn_index:].copy(),
-                    RATE=RATE_15CH,
-                    TARGET=TARGET_CHANNEL_15ch,
-                )
 
-            sc_12ch = peak_sc(
-                df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH
-            )
+        # if DEBUG_PLOT == True:
+        #     if reverse == "off":
+        #         sc_15ch_pf = peak_sc_15ch(
+        #             df_resample_15ch[syn_index:].copy(),
+        #             RATE=RATE_15CH,
+        #             TARGET=TARGET_CHANNEL_15ch,
+        #         )
 
-            Plot_15ch_pf = MultiPlotter(df_resample_15ch.copy(), RATE=RATE)
-            # Plot_15ch_pf.multi_plot(xmin=0,xmax=10,ylim=0)
-            # Plot_15ch_pf.plot_all_channels(xmin=0,xmax=8,ylim=0)
+        #     sc_12ch = peak_sc(
+        #         df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH
+        #     )
 
-            Plot_12ch = MultiPlotter_both(
-                df12=df_12ch_cleaned,
-                df15=df_resample_15ch[syn_index:].copy(),
-                RATE12=RATE_12ch,
-                RATE15=RATE,
-            )  # cleanされた12chにする。
-            Plot_12ch.multi_plot_12ch_15ch_with_sc_2(
-                xmin=0,
-                xmax=5,
-                ylim=0,
-                sc=sc_12ch,
-                ch=TARGET_CHANNEL_15ch,
-                png_path=args.png_path + "12chsc",
-            )
-            plt.show()
-            plt.close()
-            # input()
+        #     Plot_15ch_pf = MultiPlotter(df_resample_15ch.copy(), RATE=RATE)
+        #     # Plot_15ch_pf.multi_plot(xmin=0,xmax=10,ylim=0)
+        #     # Plot_15ch_pf.plot_all_channels(xmin=0,xmax=8,ylim=0)
+
+        #     Plot_12ch = MultiPlotter_both(
+        #         df12=df_12ch_cleaned,
+        #         df15=df_resample_15ch[syn_index:].copy(),
+        #         RATE12=RATE_12ch,
+        #         RATE15=RATE,
+        #     )  # cleanされた12chにする。
+        #     Plot_12ch.multi_plot_12ch_15ch_with_sc_2(
+        #         xmin=0,
+        #         xmax=5,
+        #         ylim=0,
+        #         sc=sc_12ch,
+        #         ch=TARGET_CHANNEL_15ch,
+        #         png_path=args.png_path + "12chsc",
+        #     )
+        #     plt.show()
+        #     plt.close()
+        #     # input()
 
         # print(df_12ch)
         print(syn_index)
@@ -3339,9 +3427,9 @@ def main(args):
         # df_syn_resample_15ch=linear_interpolation_resample_All(df=df_syn_15ch,sampling_rate=RATE_15CH,new_sampling_rate=RATE)
         df_syn_resample_15ch_24s = df_syn_resample_15ch[: TIME * RATE]
         print(df_syn_resample_15ch_24s)
-        plt.plot(df_syn_resample_15ch_24s[TARGET_CHANNEL_15ch])
-        plt.plot(df_12ch_cleaned["A2"])
-        plt.show()
+        # plt.plot(df_syn_resample_15ch_24s[TARGET_CHANNEL_15ch])
+        # plt.plot(df_12ch_cleaned["A2"])
+        # plt.show()
 
         con_data = pd.concat(
             [df_syn_resample_15ch_24s, df_12ch_cleaned], axis=1
@@ -3364,15 +3452,29 @@ def main(args):
         ecg_A2_np = ecg_A2.to_numpy().T
         # return 0
         # prt_eles=PTwave_search(ecg_A2=ecg_A2_np,header="A2",sampling_rate=RATE,args=args,time_length=0.7)
-        prt_eles = PTwave_search3(
-            df_12ch,
-            ecg_A2=ecg_A2_np,
-            header="A2",
-            sampling_rate=500,
-            args=args,
-            time_length=args.time_range,
-            method=args.peak_method,
-        )  # 1213からPQRST全部検出できるcwt方を使う。
+        if base_ch == "ch_1":
+            prt_eles = PTwave_search3(
+                df_12ch,
+                ecg_A2=ecg_A2_np,
+                header="A2",
+                sampling_rate=500,
+                args=args,
+                time_length=args.time_range,
+                method=args.peak_method,
+            )  # 1213からPQRST全部検出できるcwt方を使う。
+            # prt_df = pd.DataFrame(prt_eles, columns=[""]
+            # prt_eles.to_excel(
+            #     args.dataset_output_path
+            #     + "/"
+            #     + args.output_filepath
+            #     + f"/{base_ch}_base"
+            #     + "/pt_manual_setting.xlsx",
+            #     index=False,
+            #     header=True,
+            # )
+        # ch_1以外であればch_1の値を使う
+        else:
+            pass
         heartbeat_cutter_prt = HeartbeatCutter_prt(
             con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
         )  # 切り出す秒数を指定する。
@@ -3459,7 +3561,7 @@ if __name__ == "__main__":
     args.peak_method = (
         "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
     )
-    args.pos = "0"
+    args.pos = "back"
     args.type = ""
     args.dir_name = "{}/{}".format(args.name, args.type)
     args.png_path = ""
@@ -3469,7 +3571,7 @@ if __name__ == "__main__":
     )
     args.TARGET_CHANNEL_12CH = "A2"
     args.cut_min_max_range = [0.0, 10000.0]
-    args.reverse = "off"
+    args.reverse = "on"
     args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.project_path='/home/cs28/share/goto/goto/ecg_project'

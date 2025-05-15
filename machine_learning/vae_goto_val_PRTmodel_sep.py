@@ -25,6 +25,7 @@ from sklearn.manifold import TSNE
 from scipy import signal
 import matplotlib.cm as cm
 import matplotlib
+from torch.utils.tensorboard import SummaryWriter
 
 matplotlib.use("TkAgg")
 
@@ -47,6 +48,7 @@ import csv
 
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(base_dir)
+
 from config.settings import (
     DATA_DIR,
     BASE_DIR,
@@ -55,7 +57,7 @@ from config.settings import (
     RAW_DATA_DIR,
     TEST_DIR,
     RATE,
-    RATE_16CH,
+    RATE_15CH,
     TIME,
     DATASET_MADE_DATE,
     OUTPUT_MAE_DIR,
@@ -574,7 +576,7 @@ def plot_fig_train_name(
             plt.close()
 
 
-def plot_fig_16ch_only(
+def plot_fig_15ch_only(
     recon_x, datalength, ts, args, batch_size_num, label_name, pt_index
 ):
     sample_rate = 500
@@ -640,7 +642,7 @@ def plot_fig_16ch_only(
                 os.path.join(
                     args.fig_root,
                     str(ts),
-                    "ch={}_16ch_only_test_x_xo_{}.png".format(
+                    "ch={}_15ch_only_test_x_xo_{}.png".format(
                         ecg_ch_names[q], label_name[p]
                     ),
                 ),
@@ -1145,8 +1147,8 @@ def loss_fn_mse_PRT(
     MSE = torch.nn.MSELoss(reduction="sum")
     MSE_loss = 0.0
     for i in range(batch_size):
-        index1 = Q_peaks[i]
-        index2 = S_peaks[i]
+        # index1 = Q_peaks[i]
+        # index2 = S_peaks[i]
         # print(index1)
         # print(index2)
         index1 = 170  # 　一旦はこれでやらせてみる 0401
@@ -1851,6 +1853,16 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
+    writer_P = SummaryWriter(log_dir=f"runs/{args.current_time}/P_log")
+    writer_R = SummaryWriter(log_dir=f"runs/{args.current_time}/R_log")
+    writer_T = SummaryWriter(log_dir=f"runs/{args.current_time}/T_log")
+    # 上記を辞書にまとめる
+    writer_dict = {
+        "P": writer_P,
+        "R": writer_R,
+        "T": writer_T,
+    }
+
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
@@ -2050,7 +2062,7 @@ def main(args):
                 ):
                     # print("pt_index", pt_index)
                     x, xo = x.to(device), xo.to(device)
-                    x_check = torch.reshape(x, (-1, 16, args.datalength))
+                    # x_check = torch.reshape(x, (-1, 15, args.datalength))
                     recon_x, mean, log_var, z = vae(x)
                     # print(recon_x.shape)
                     # print(xo.shape)
@@ -2141,7 +2153,7 @@ def main(args):
                             c = torch.arange(0, 10).long().unsqueeze(1).to(device)
                             ifx = vae.inference(n=c.size(0), c=c)
                         else:
-                            ifx = vae.inference(n=16)
+                            ifx = vae.inference(n=15)
 
                         ###学習途中の生成の様子を描画###
 
@@ -2165,88 +2177,28 @@ def main(args):
                         print(z)
                         print(xo.shape)
                         batch_size_now = xo.shape[0]
-                        # plot_fig_train(recon_x=recon_x,xo=xo,datalength=datalength,ts=ts,args=args,iteration_num=iteration,batch_size_num=batch_size_now,epoch_num=epoch)
+                writer_dict[target_weight].add_scalar(
+                    "Loss/train_loss", loss_keep.item() / len(train_data_loader), epoch
+                )
+                writer_dict[target_weight].add_scalar(
+                    "Loss/val_loss", acc_keep.item() / len(train_data_loader), epoch
+                )
+                writer_dict[target_weight].add_scalar(
+                    "KL Divergence",
+                    kdl_keep.item() / len(train_data_loader),
+                    epoch,
+                )
+                writer_dict[target_weight].add_scalar(
+                    "MSE Loss",
+                    mse_keep / len(train_data_loader),
+                    epoch,
+                )
+                # writer_dict[target_weight].add_scalar(
+                #     "BCE Loss",
+                #     bce_keep / len(train_data_loader),
+                #     epoch,
+                # )
 
-                        # plot_fig_train_name(recon_x=recon_x,xo=xo,datalength=datalength,ts=ts,args=args,iteration_num=iteration,batch_size_num=batch_size_now,epoch_num=epoch,label_name=label_name)
-                    # # 訓練データで推論してMAE計算
-                    # acc_temp = []
-                    # vae.eval()
-                    # train_val = []
-                    # test_val = []
-                    # with torch.no_grad():
-                    #     for j, (x, xo, label_name, pt_index) in enumerate(
-                    #         train_data_loader
-                    #     ):
-                    #         x, xo = x.to(device), xo.to(device)
-                    #         recon_x, mean, log_var, z = vae(x)
-                    #         for i in range(len(label_name)):
-                    #             label_temps.append(label_name[i])
-                    #         mae_loss = MAE_2(reduction="none")
-                    #         recon_x = recon_x.view(-1, ecg_ch, datalength)
-                    #         xo = xo.view(-1, ecg_ch, datalength)
-                    #         acc_mae = mae_loss(recon_x, xo)
-
-                    #         if args.loss_pt_on_off == "off":
-                    #             train_val = train_val + cul_val_no_pt(
-                    #                 acc_mae
-                    #             )  # cul_val_no_ptは波形全体でmae計算
-                    #         else:
-                    #             train_val = train_val + cul_val(
-                    #                 pt_index, acc_mae
-                    #             )  # cul_valはptの範囲でmae計算i
-                    # train_values = [array_item.item() for array_item in train_val]
-                    # train_val_ndarray = np.array(train_values, dtype=np.float32)
-                    # # print(test_val_ndarray.mean())
-                    # train_acc_temps.append(train_val_ndarray.mean())
-
-                    # logs["train_loss"].append(loss_keep.item() / (iteration + 1))
-                    # if args.loss_fn_type == "bce":
-                    #     logs["train_bce"].append(bce_keep.item() / (iteration + 1))
-                    # if args.loss_fn_type == "mse":
-                    #     logs["train_mse"].append(mse_keep.item() / (iteration + 1))
-                    # logs["train_kdl"].append(kdl_keep.item() / (iteration + 1))
-                    # logs["train_acc"].append(acc_keep.item() / (iteration + 1))
-
-                    # # testデータで推論してMAE計算
-                    # acc_temp = []
-                    # vae.eval()
-                    # test_val = []
-                    # with torch.no_grad():
-                    #     # for j,(x,xo,label_name) in enumerate(test_loader):
-                    #     for j, (x, xo, label_name, pt_index) in enumerate(test_loader):
-                    #         x, xo = x.to(device), xo.to(device)
-                    #         recon_x, mean, log_var, z = vae(x)
-                    #         z_temp = tensor_to_ndarray(z)
-                    #         z_temps = np.append(z_temps, z_temp, axis=0)
-                    #         for i in range(len(label_name)):
-                    #             label_temps.append(label_name[i])
-                    #         mae_loss = MAE_2(reduction="none")
-                    #         recon_x = recon_x.view(-1, ecg_ch, datalength)
-                    #         xo = xo.view(-1, ecg_ch, datalength)
-                    #         acc_mae = mae_loss(recon_x, xo)
-
-                    #         if args.loss_pt_on_off == "off":
-                    #             # test_val=test_val+cul_val_no_pt(acc_rmse)#cul_val_no_ptは波形全体でrmse計算
-                    #             test_val = test_val + cul_val_no_pt(
-                    #                 acc_mae
-                    #             )  # cul_val_no_ptは波形全体でmae計算
-                    #         else:
-                    #             # test_val=test_val+cul_val(pt_index,acc_rmse)#cul_valはptの範囲でRMSE計算
-                    #             test_val = test_val + cul_val(
-                    #                 pt_index, acc_mae
-                    #             )  # cul_valはptの範囲でmae計算i
-                    # test_values = [array_item.item() for array_item in test_val]
-                    # test_val_ndarray = np.array(test_values, dtype=np.float32)
-                    # # print(test_val_ndarray.mean())
-                    # test_acc_temps.append(test_val_ndarray.mean())
-
-                    # logs["test_loss"].append(loss_keep.item() / (iteration + 1))
-                    # if args.loss_fn_type == "bce":
-                    #     logs["test_bce"].append(bce_keep.item() / (iteration + 1))
-                    # if args.loss_fn_type == "mse":
-                    #     logs["test_mse"].append(mse_keep.item() / (iteration + 1))
-                    # logs["test_kdl"].append(kdl_keep.item() / (iteration + 1))
-                    # logs["tesx_acc"].append(acc_keep.item() / (iteration + 1)
             if target_weight == "P":
                 torch.save(
                     vae.state_dict(), os.path.join("model_pth", "vae_pwave_weight.pth")
@@ -2271,6 +2223,8 @@ def main(args):
                     vae.state_dict(),
                     os.path.join(args.fig_root, str(ts), "vae_twave_weight.pth"),
                 )
+
+        writer_dict[target_weight].close()
 
         "テストデータのMAE推移プロット"
         plt.xlabel("epoch")
@@ -2430,6 +2384,15 @@ def main(args):
                 recon_x_p, mean_p, log_var_p, z_p = vae_dict["P"](x)
                 recon_x_r, mean_r, log_var_r, z_r = vae_dict["R"](x)
                 recon_x_t, mean_t, log_var_t, z_t = vae_dict["T"](x)
+                print(
+                    f"mean_p:{mean_p}, log_var_p:{log_var_p}, z_p:{z_p}, recon_x_p:{recon_x_p}"
+                )
+                print(
+                    f"mean_r:{mean_r}, log_var_r:{log_var_r}, z_r:{z_r}, recon_x_r:{recon_x_r}"
+                )
+                print(
+                    f"mean_t:{mean_t}, log_var_t:{log_var_t}, z_t:{z_t}, recon_x_t:{recon_x_t}"
+                )
                 before_r_index = 170
                 after_r_index = 230
                 recon_x = recon_x_p.view(-1, ecg_ch, datalength)
@@ -2577,12 +2540,12 @@ def main(args):
         )
         write_to_csv(output_file, data=data_to_write)
 
-    elif args.mode == "16ch_only":
-        print("16ch_only MODE::\n")
-        test_dataset = Dataset.Dataset_setup_12ch_pt_16ch_only(
+    elif args.mode == "15ch_only":
+        print("15ch_only MODE::\n")
+        test_dataset = Dataset.Dataset_setup_12ch_pt_15ch_only(
             TARGET_NAME="osaka",
             transform_type=args.transform_type,
-            Dataset_name="16ch_only",
+            Dataset_name="15ch_only",
             dataset_num=3,
         )
         test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
@@ -2749,7 +2712,7 @@ def main(args):
                 print(z)
                 batch_size_now = len(label_name)
                 print(batch_size_now)
-                plot_fig_16ch_only(
+                plot_fig_15ch_only(
                     recon_x=recon_x,
                     datalength=datalength,
                     ts=ts,
@@ -2773,7 +2736,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0422_1110_z10_notpatient_nonuse_height"
+    current_time = "0514_1420_z8_alpha2000_vae"
 
     parser = argparse.ArgumentParser()
     # parser.add_argument("--augumentation", type=str, default="")
@@ -2785,7 +2748,7 @@ if __name__ == "__main__":
     parser.add_argument("--loss_pt_on_off_R_weight", type=str, default="")
     parser.add_argument("--loss_pt_on_off_P_weight", type=str, default="")
     parser.add_argument("--loss_pt_on_off_T_weight", type=str, default="")
-    parser.add_argument("--dataset_num", type=int, default=20)  # ICCEの際は16心拍分で
+    parser.add_argument("--dataset_num", type=int, default=100)  # ICCEの際は16心拍分で
 
     parser.add_argument("--TARGET_NAME", type=str, default="")
     # parser.add_argument("--dname", type = str ,default = "test")
@@ -2801,7 +2764,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--enc_convlayer_sizes",
         type=list,
-        default=[[16, 1], [30, 2]],
+        default=[[15, 1], [30, 2]],
     )  # [[入力,ストライド],]
     parser.add_argument(
         "--enc_fclayer_sizes", type=list, default=[6000, 500, 64]
@@ -2835,13 +2798,12 @@ if __name__ == "__main__":
         "--loss_fn_type", type=str, default="mse"
     )  # ECGの正規化なしだと上手くいった。
     parser.add_argument("--beta", type=int, default=1)
-    parser.add_argument("--alpha", type=int, default=300000)
-    parser.add_argument("--dim_red", type=str, default="")
+    # parser.add_argument("--alpha", type=int, default=300000)
+    parser.add_argument("--alpha", type=int, default=2000)
     parser.add_argument("--transform_type", type=str, default="normal")
+    parser.add_argument("--current_time", type=str, default=current_time)
 
-    # parser.add_argument("--loss_fn_type", type=str, default='bce')
     parser.add_argument("--ecg_ch_num", type=int, default=8)
-    parser.add_argument("--current_time", type=str)
     parser.add_argument(
         "--ave_data_flg", type=int, default=0
     )  # 平均心拍を利用するか否か

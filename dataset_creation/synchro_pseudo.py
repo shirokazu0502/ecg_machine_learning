@@ -1,9 +1,9 @@
 import argparse
 from Make_dataset_0120 import (
-    ecg_clean_df_16ch,
+    ecg_clean_df_15ch,
     linear_interpolation_resample_All,
     peak_sc,
-    peak_sc_16ch,
+    peak_sc_15ch,
     peak_sc_plot,
     validate_integer_input,
     CSVReader_16ch,
@@ -30,7 +30,7 @@ from config.settings import (
     RAW_DATA_DIR,
     TEST_DIR,
     RATE,
-    RATE_16CH,
+    RATE_15CH,
     TIME,
     DATASET_MADE_DATE,
 )
@@ -38,9 +38,9 @@ from config.name_dic import select_name_and_date
 
 RATE = 500.00
 RATE_12ch = 500.00
-RATE_16CH = RATE_16CH
+RATE_15CH = RATE_15CH
 TARGET_CHANNEL_12CH = "A2"
-TARGET_CHANNEL_16ch = "ch_1"
+TARGET_CHANNEL_15ch = "ch_1"
 reverse = "on"
 patient_number = "2"
 
@@ -162,53 +162,53 @@ def clean_ecg_signal(
 
 def main(args):
     dir_path = args.raw_datas_dir
-    csv_reader_16ch = CSVReader_16ch(dir_path)
+    csv_reader_15ch = CSVReader_16ch(dir_path)
     print(dir_path)
-    df_16ch = csv_reader_16ch.process_files()
-    print(df_16ch)
-    # cols = df_16ch.columns
-    # df_16ch = pd.DataFrame()
+    df_15ch = csv_reader_15ch.process_files()
+    print(df_15ch)
+    # cols = df_15ch.columns
+    # df_15ch = pd.DataFrame()
     # for col in cols:
-    #     df_16ch[col] = df_16ch[col] - df_16ch["ch_16"]
-    # df_16ch = df_16ch.drop(columns=["ch_16"])
-    df_16ch_cleaned = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
-    df_resample_16ch = linear_interpolation_resample_All(
-        df=df_16ch_cleaned.copy(), sampling_rate=RATE_16CH, new_sampling_rate=RATE
+    #     df_15ch[col] = df_15ch[col] - df_15ch["ch_16"]
+    # df_15ch = df_15ch.drop(columns=["ch_16"])
+    df_15ch_cleaned = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=RATE_15CH)
+    df_resample_15ch = linear_interpolation_resample_All(
+        df=df_15ch_cleaned.copy(), sampling_rate=RATE_15CH, new_sampling_rate=RATE
     )
-    df_16ch_cleaned = df_resample_16ch.copy()
+    df_15ch_cleaned = df_resample_15ch.copy()
     csv_reader_12ch = CSVReader_12ch(dir_path)
     df_12ch = csv_reader_12ch.process_files()
     df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
     if reverse == "off":
-        sc_16ch = peak_sc_16ch(
-            df_16ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+        sc_15ch = peak_sc_15ch(
+            df_15ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
         )
-        peak_sc_plot(df_16ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
+        peak_sc_plot(df_15ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch)
     else:
-        df_16ch_reverse = df_16ch_cleaned.copy()
-        df_16ch_reverse[TARGET_CHANNEL_16ch] = (-1) * df_16ch_cleaned.copy()[
-            TARGET_CHANNEL_16ch
+        df_15ch_reverse = df_15ch_cleaned.copy()
+        df_15ch_reverse[TARGET_CHANNEL_15ch] = (-1) * df_15ch_cleaned.copy()[
+            TARGET_CHANNEL_15ch
         ]
-        df_16ch_cleaned = df_16ch_reverse.copy()
-        sc_16ch = peak_sc_16ch(
-            df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+        df_15ch_cleaned = df_15ch_reverse.copy()
+        sc_15ch = peak_sc_15ch(
+            df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
         )
-        peak_sc_plot(df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
+        peak_sc_plot(df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch)
         # 先頭は削除
-        sc_16ch = sc_16ch.drop(0)
+        sc_15ch = sc_15ch.drop(0)
     sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
     # print(sc_12ch)
     # input()
     peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-    # 16chと12chのデータ同期
-    for i, (sc_16ch, sc12) in enumerate(zip(sc_16ch[0], sc_12ch[0])):
-        center_16ch_idx = int(sc_16ch * RATE)
-        start_16ch_idx = int(center_16ch_idx - 0.4 * RATE)
-        end_16ch_idx = int(center_16ch_idx + 0.4 * RATE)
-        heartbeat_16ch = df_16ch_cleaned.iloc[start_16ch_idx:end_16ch_idx]
-        print(start_16ch_idx)
-        #     heartbeat_16ch.to_csv(
-        #         PROCESSED_DATA_DIR + "/synchro_data/16ch_{}.csv".format(i, center_16ch_idx),
+    # 15chと12chのデータ同期
+    for i, (sc_15ch, sc12) in enumerate(zip(sc_15ch[0], sc_12ch[0])):
+        center_15ch_idx = int(sc_15ch * RATE)
+        start_15ch_idx = int(center_15ch_idx - 0.4 * RATE)
+        end_15ch_idx = int(center_15ch_idx + 0.4 * RATE)
+        heartbeat_15ch = df_15ch_cleaned.iloc[start_15ch_idx:end_15ch_idx]
+        print(start_15ch_idx)
+        #     heartbeat_15ch.to_csv(
+        #         PROCESSED_DATA_DIR + "/synchro_data/15ch_{}.csv".format(i, center_15ch_idx),
         #         header=False,
         #         index=False,
         #     )
@@ -221,10 +221,10 @@ def main(args):
         #         header=False,
         #         index=False,
         #     )
-        # 16chと12ch結合
-        heartbeat_16ch = heartbeat_16ch.reset_index(drop=True)
+        # 15chと12ch結合
+        heartbeat_15ch = heartbeat_15ch.reset_index(drop=True)
         heartbeat_12ch = heartbeat_12ch.reset_index(drop=True)
-        merge_df = pd.concat([heartbeat_16ch, heartbeat_12ch], axis=1)
+        merge_df = pd.concat([heartbeat_15ch, heartbeat_12ch], axis=1)
         print(merge_df)
 
         # ecg_A2 = merge_df["A2"]
@@ -245,7 +245,7 @@ def main(args):
         # )  # 切り出す秒数を指定する。
         # heartbeat_cutter_prt.cut_heartbeats(
         #     file_path=args.dataset_output_path + "/" + args.output_filepath,
-        #     ch=TARGET_CHANNEL_16ch,
+        #     ch=TARGET_CHANNEL_15ch,
         #     cut_min_max_range=cut_min_max_range,
         #     args=args,
         # )print
@@ -328,7 +328,7 @@ def main(args):
     # )  # 切り出す秒数を指定する。
     # heartbeat_cutter_prt.cut_heartbeats(
     #     file_path=args.dataset_output_path + "/" + args.output_filepath,
-    #     ch=TARGET_CHANNEL_16ch,
+    #     ch=TARGET_CHANNEL_15ch,
     #     cut_min_max_range=cut_min_max_range,
     #     args=args,
     # )
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     parser.add_argument("--dir_name", type=str, default="")
     parser.add_argument("--png_path", type=str, default="")
     parser.add_argument("--output_filepath", type=str, default="")
-    # parser.add_argument("--TARGET_CHANNEL_16ch", type=str, default='ch_1')
+    # parser.add_argument("--TARGET_CHANNEL_15ch", type=str, default='ch_1')
     parser.add_argument("--TARGET_CHANNEL_12CH", type=str, default="")
     # parser.add_argument("--cut_min_max_range", type=list, default=[0,10])
     parser.add_argument("--cut_min_max_range", type=list, default="")
