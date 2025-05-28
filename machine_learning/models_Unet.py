@@ -101,7 +101,7 @@ CHANNEL = 15
 
 
 class UNet1D(nn.Module):
-    def __init__(self, in_channels=15, out_channels=8, base_filters=32):
+    def __init__(self, in_channels=15, out_channels=8, base_filters=64):
         super(UNet1D, self).__init__()
 
         # 畳み込み層3つ用
@@ -109,14 +109,16 @@ class UNet1D(nn.Module):
         self.enc1 = self.encoder_block(in_channels, base_filters)
         self.enc2 = self.encoder_block(base_filters, base_filters * 2)
         self.enc3 = self.encoder_block(base_filters * 2, base_filters * 4)
+        self.enc4 = self.encoder_block(base_filters * 4, base_filters * 8)
 
         # Bridge
-        self.bridge = self.conv_block(base_filters * 4, base_filters * 8)
+        self.bridge = self.conv_block(base_filters * 8, base_filters * 16)
 
         # Decoder
-        self.dec1 = self.decoder_block(base_filters * 8, base_filters * 4)
-        self.dec2 = self.decoder_block(base_filters * 4, base_filters * 2)
-        self.dec3 = self.decoder_block(base_filters * 2, base_filters)
+        self.dec1 = self.decoder_block(base_filters * 16, base_filters * 8)
+        self.dec2 = self.decoder_block(base_filters * 8, base_filters * 4)
+        self.dec3 = self.decoder_block(base_filters * 4, base_filters * 2)
+        self.dec4 = self.decoder_block(base_filters * 2, base_filters)
 
         # # Encoder
         # self.enc1 = self.encoder_block(in_channels, base_filters)
@@ -167,20 +169,25 @@ class UNet1D(nn.Module):
         p2 = self.pool(x2)
         x3 = self.enc3(p2)
         p3 = self.pool(x3)
+        x4 = self.enc4(p3)
+        p4 = self.pool(x4)
         # Bridge
-        b = self.bridge(p3)
+        b = self.bridge(p4)
         # Decoder
         u1 = self.dec1["upconv"](b)
-        u1 = self.pad_and_concat(u1, x3)
+        u1 = self.pad_and_concat(u1, x4)
         u1 = self.dec1["conv"](u1)
         u2 = self.dec2["upconv"](u1)
-        u2 = self.pad_and_concat(u2, x2)
+        u2 = self.pad_and_concat(u2, x3)
         u2 = self.dec2["conv"](u2)
         u3 = self.dec3["upconv"](u2)
-        u3 = self.pad_and_concat(u3, x1)
+        u3 = self.pad_and_concat(u3, x2)
         u3 = self.dec3["conv"](u3)
+        u4 = self.dec4["upconv"](u3)
+        u4 = self.pad_and_concat(u4, x1)
+        u4 = self.dec4["conv"](u4)
 
-        out = self.out_conv(u3)
+        out = self.out_conv(u4)
         return out
         # # Encoder
         # x1 = self.enc1(x)

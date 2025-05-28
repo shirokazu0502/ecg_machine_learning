@@ -26,6 +26,7 @@ from scipy import signal
 import matplotlib.cm as cm
 import matplotlib
 from torch.utils.tensorboard import SummaryWriter
+from scipy.stats import pearsonr
 
 matplotlib.use("TkAgg")
 
@@ -909,6 +910,7 @@ def write_to_csv(file_path, data):
             "MAE_V4",
             "MAE_V5",
             "MAE_V6",
+            "pearson_score",
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
@@ -1029,10 +1031,12 @@ def save_csv(data, ts, args, label_name, data_rec_or_xo):
     return output_path
 
 
-def train_unet(model, train_loader, optimizer, criterion, epochs, device, writer):
+def train_unet(
+    model, train_loader, test_loader, optimizer, criterion, epochs, device, writer
+):
     model.train()
     for epoch in range(epochs):
-        epoch_loss = 0.0
+        total_train_loss = 0.0
         for x, xo, _, _ in train_loader:
             x, xo = x.to(device), xo.to(device)
             optimizer.zero_grad()
@@ -1040,11 +1044,22 @@ def train_unet(model, train_loader, optimizer, criterion, epochs, device, writer
             loss = criterion(outputs, xo)
             loss.backward()
             optimizer.step()
-            epoch_loss += loss.item()
+            total_train_loss += loss.item()
         print(
-            f"Epoch [{epoch + 1}/{epochs}], Loss: {epoch_loss / len(train_loader):.4f}"
+            f"Epoch [{epoch + 1}/{epochs}], Loss: {total_train_loss / len(train_loader):.4f}"
         )
-        writer.add_scalar("Loss/loss", epoch_loss, epoch)
+        writer.add_scalar(
+            "Loss/train_loss", total_train_loss / len(train_loader), epoch
+        )
+        model.eval()
+        total_test_loss = 0.0
+        with torch.no_grad():
+            for x, xo, label_name, _ in test_loader:
+                x, xo = x.to(device), xo.to(device)
+                outputs = model(x)
+                loss = criterion(outputs, xo)
+                total_test_loss += loss.item()
+        writer.add_scalar("Loss/test_loss", total_test_loss / len(test_loader), epoch)
 
 
 def test_unet(model, test_loader, device, args, ts):
@@ -1054,6 +1069,7 @@ def test_unet(model, test_loader, device, args, ts):
     label_temps = []
     test_val_all = []
     test_val_12ch_all = []
+    pearson_scores = []
     datalength = args.datalength
     ecg_ch = args.ecg_ch_num
     if ecg_ch == 12:
@@ -1126,6 +1142,14 @@ def test_unet(model, test_loader, device, args, ts):
             test_val_12ch = test_val_12ch.reshape(-1, args.ecg_ch_num)
             test_val_12ch_all = test_val_12ch_all + test_val_12ch.tolist()
 
+            recon_x_np = recon_x.view(-1, datalength).cpu().numpy().astype(np.float64)
+            xo_np = xo.view(-1, datalength).cpu().numpy().astype(np.float64)
+            r, _ = pearsonr(
+                recon_x_np.ravel(),
+                xo_np.ravel(),
+            )
+            pearson_scores.append(r)
+
             sample_rate = 500
             sc_pt = pt_index / sample_rate
             sample_num = args.datalength
@@ -1162,7 +1186,7 @@ def test_unet(model, test_loader, device, args, ts):
                 data_rec_or_xo="xo",
             )
 
-    return test_val_all, test_val_12ch_all
+    return test_val_all, test_val_12ch_all, pearson_scores
 
 
 def main(args):
@@ -1178,7 +1202,7 @@ def main(args):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    writer = SummaryWriter(log_dir=f"runs/{args.current_time}")
+    writer = SummaryWriter(log_dir=f"runs/{args.current_time}/{args.TARGET_NAME}")
     # PからTまでそれぞれにおけるデータセット作成
     # train_dataset_dict = {}
     # test_dataset_dict = {}
@@ -1296,7 +1320,7 @@ def main(args):
     # summary(unet, input_size=(1,16 , 384))
     in_channels = 15
     out_channels = 8
-    base_filters = 32
+    base_filters = 64
     # common_kwargs = {
     #     "datalength": datalength,
     #     "enc_convlayer_sizes": args.enc_convlayer_sizes,
@@ -1318,7 +1342,7 @@ def main(args):
     if args.mode == "train":
         print("TRAINING MODE::\n")
 
-        train_data_loader = DataLoader(
+        train_loader = DataLoader(
             dataset=train_dataset, batch_size=args.train_batch_size, shuffle=True
         )
         # dataset=train_dataset, batch_size=args.train_batch_size, shuffle=False)
@@ -1333,51 +1357,27 @@ def main(args):
 
         # 訓練
         print("Training U-Net...")
-        if args.loss_pt_on_off == "on":
-            train_unet(
-                unet,
-                train_data_loader,
-                optimizer,
-                loss_fn_unet_mse,
-                args.epochs,
-                device,
-                writer,
-            )
-        else:
-            train_unet(
-                unet,
-                train_data_loader,
-                optimizer,
-                loss_fn_unet_mse,
-                args.epochs,
-                device,
-                writer,
-            )
+        train_unet(
+            unet,
+            train_loader,
+            test_loader,
+            optimizer,
+            loss_fn_unet_mse,
+            args.epochs,
+            device,
+            writer,
+        )
 
         torch.save(
             unet.state_dict(),
-            os.path.join("model_pth", "unet_pwave_weight.pth"),
+            os.path.join("model_pth", "unet.pth"),
         )
         torch.save(
             unet.state_dict(),
-            os.path.join(args.fig_root, str(ts), "unet_pwave_weight.pth"),
+            os.path.join(args.fig_root, str(ts), "unet.pth"),
         )
 
         writer.close()
-
-        "テストデータのMAE推移プロット"
-        plt.xlabel("epoch")
-        plt.ylabel("MAE")
-        plt.plot(train_acc_temps, color="blue")
-        plt.plot(test_acc_temps, color="red")
-        plt.ylim(0, 0.1)
-        # plt.plot(test_val,color="red")
-        plt.legend(["train_acc", "test_acc"])
-        # plt.title("beta={}".format(str(args.beta)))
-        plt.title("MAE values of train and test data epoch 0-{}".format(epoch))
-        plt.savefig(os.path.join(args.fig_root, str(ts), "test_acc"), dpi=300)
-        # plt.show()
-        plt.close()
 
         if args.loss_fn_type == "bce":
             plt.xlabel("epoch")
@@ -1402,36 +1402,6 @@ def main(args):
             # torch.save(unet.state_dict(), args.pth)
             plt.close()
 
-        # #モデル保存
-        if args.loss_fn_type == "mse":
-            plt.xlabel("epoch")
-            plt.ylabel("loss")
-            plt.plot(logs["loss"], color="blue")
-            plt.plot(logs["mse"], color="red")
-            plt.plot(logs["kdl"], color="green")
-            plt.legend(["Loss_all", "MSE", "KLD"])
-            plt.title("beta={}".format(str(args.beta)))
-            #    plt.show()
-            plt.savefig(
-                os.path.join(args.fig_root, str(ts), "loss_epoch_all.png"), dpi=300
-            )
-            #    plt.show()
-            plt.close()
-            plt.ylim(0, 100)
-
-            plt.xlabel("epoch")
-            plt.ylabel("loss")
-            plt.plot(logs["loss"], color="blue")
-            plt.legend(["loss"])
-            plt.title("beta={}".format(str(args.beta)))
-            plt.savefig(
-                os.path.join(args.fig_root, str(ts), "loss_epoch_epoch.png"), dpi=300
-            )
-            #    plt.show()
-            plt.close()
-
-        # plot_scatter_2d(z=z_temps,labels=label_temps,latent_size=latent_size,ts=ts,args=args)
-
     elif args.mode == "test":
         print("TEST MODE::\n")
         test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
@@ -1439,11 +1409,13 @@ def main(args):
         print(test_loader)
         unet.load_state_dict(
             torch.load(
-                os.path.join("model_pth", "unet_pwave_weight.pth"),
+                os.path.join("model_pth", "unet.pth"),
                 map_location=lambda storage, loc: storage,
             )
         )
-        test_val_all, test_val_12ch_all = test_unet(unet, test_loader, device, args, ts)
+        test_val_all, test_val_12ch_all, pearson_scores = test_unet(
+            unet, test_loader, device, args, ts
+        )
 
         test_val_all = np.array(test_val_all)
         test_val_mean = np.mean(test_val_all)
@@ -1451,6 +1423,7 @@ def main(args):
         print(test_val_12ch_all.shape)
         test_val_12ch_mean = np.mean(test_val_12ch_all, axis=0)
         print(test_val_12ch_mean.shape)
+        pearson_score = np.mean(pearson_scores)
         data_to_write = {
             "TARGET_NAME": args.TARGET_NAME,
             "MAE_all": test_val_mean,
@@ -1462,6 +1435,7 @@ def main(args):
             "MAE_V4": test_val_12ch_mean[5],
             "MAE_V5": test_val_12ch_mean[6],
             "MAE_V6": test_val_12ch_mean[7],
+            "pearson_score": pearson_score,
         }
         # write_to_csv(file_path='cross_val_results/Datasets={},MAE={}.csv'.format(args.Dataset_name,args.loss_pt_on_off),data=data_to_write)
         output_file = os.path.join(
@@ -1660,7 +1634,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0515_0940_z8_ch15*4"
+    current_time = "0527_1540_ch15_t_extend_unet"
 
     parser = argparse.ArgumentParser()
     # parser.add_argument("--augumentation", type=str, default="")
@@ -1680,7 +1654,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=500)
     parser.add_argument("--train_batch_size", type=int, default=4)  # default=256
     parser.add_argument("--val_batch_size", type=int, default=1)  # default=256
-    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--learning_rate", type=float, default=0.00005)
     parser.add_argument("--datalength", type=int, default=400)
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [32, 1], [64, 2]]) #畳み込み層の設定　増やしすぎると過学習の可能性　前から２ペアずつ読み込む　２つ目の[]の第二引数はストライド
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120, 2],[240,2]])#[[入力,ストライド],]

@@ -15,8 +15,9 @@ subject_group="1"
 # P_weights="1.0"
 # R_weights="0.001"
 # T_weights="1.0"
+
 P_weight="0.100 1.000"
-R_weight="0.005 1.000"
+R_weight="0.005 0.500"
 T_weight="0.100 1.000"
 
 # augumentation="st" #ST部分の延長短縮をするデータ拡張を行う。
@@ -38,9 +39,9 @@ ave_data_flg=1
 # done
 
 for name in $measure_names; do
-    python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 400 --latent_size 4 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
-    python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 400 --latent_size 4 --beta 1 --mode zplot --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
-    python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 400 --latent_size 4 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+    python3 vae_goto_val_PRTmodel_sep_0515.py --TARGET_NAME "$name" --epochs 400 --latent_size 4 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+    # python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 10 --latent_size 8 --beta 1 --mode zplot --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+    # python3 vae_goto_val_PRTmodel_sep.py --TARGET_NAME "$name" --epochs 10 --latent_size 8 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
 done
 python3 output_data_pqrst_v3.py --dataset_date $dataset_date --names $measure_names --measure_dates $measure_dates ----subject_group "$subject_group" --dataset_ver "$dataset" --P_weight "$P_weight" --R_weight "$R_weight" --T_weight "$T_weight" --augumentation "$augumentation"
 

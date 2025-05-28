@@ -1708,7 +1708,8 @@ def Dataset_setup_8ch_pt_augmentation(
         ave_path = ""
     print(ave_path)
     print("fafafafafafa")
-    base_channels = ["ch_1_base", "ch_4_base", "ch_13_base", "ch_16_base"]
+    # base_channels = ["ch_1_base", "ch_4_base", "ch_13_base", "ch_16_base"]
+    base_channels = ["ch_1_base"]
     for j in range(len(Train_list)):
         for base_ch in base_channels:
             path_to_dataset = directory_path + "/" + Train_list[j] + "/" + base_ch + "/"

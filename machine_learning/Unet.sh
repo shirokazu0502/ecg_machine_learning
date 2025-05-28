@@ -7,8 +7,8 @@
 # measure_dates="1130 1107 1115 1219 0407 0407 0304 1001 1001 1001 1109 1109"
 # measure_names="matumoto yoshikura takahashi taniguchi kawai goto"
 # measure_dates="1128 1130 1220 1107 1115 1219"
-measure_names="matumoto yoshikura taniguchi kawai goto gosha nakanishi kasahara"
-measure_dates="1130 1107 1115 1219 0407 0407 0304"
+measure_names="matumoto yoshikura taniguchi kawai goto gosha nakanishi kasahara takahashi_jr nakashimizu gobara"
+measure_dates="1128 1130 1107 1115 1219 0407 0407 0304 0512 0512 0512 0512"
 dataset_date="0418"
 subject_group="1"
 #再構成項のP波，R波,T波部分の重みを変更できる。
@@ -19,7 +19,7 @@ P_weight="0.100 1.000"
 R_weight="0.005 1.000"
 T_weight="0.100 1.000"
 
-# augumentation="st" #ST部分の延長短縮をするデータ拡張を行う。
+augumentation="st" #ST部分の延長短縮をするデータ拡張を行う。
 # p_augumentation=""
 # r_argumentation=""
 # t_augumentation=""
@@ -38,8 +38,8 @@ ave_data_flg=1
 # done
 
 for name in $measure_names; do
-    python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 400 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --ave_data_flg $ave_data_flg
-    python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 400 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off  --ave_data_flg $ave_data_flg
+    python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 100 --beta 1 --mode train --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off --ave_data_flg $ave_data_flg
+    python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 100 --beta 1 --mode test --transform_type normal --Dataset_name pqrst_nkmodule_since"$dataset_date"_cwt --loss_pt_on_off off  --ave_data_flg $ave_data_flg
 done
 python3 output_data_pqrst_v3.py --dataset_date $dataset_date --names $measure_names --measure_dates $measure_dates ----subject_group "$subject_group" --dataset_ver "$dataset"--augumentation "$augumentation"
 

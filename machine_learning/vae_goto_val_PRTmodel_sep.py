@@ -26,6 +26,7 @@ from scipy import signal
 import matplotlib.cm as cm
 import matplotlib
 from torch.utils.tensorboard import SummaryWriter
+from scipy.stats import pearsonr
 
 matplotlib.use("TkAgg")
 
@@ -2177,6 +2178,7 @@ def main(args):
                         print(z)
                         print(xo.shape)
                         batch_size_now = xo.shape[0]
+
                 writer_dict[target_weight].add_scalar(
                     "Loss/train_loss", loss_keep.item() / len(train_data_loader), epoch
                 )
@@ -2378,6 +2380,7 @@ def main(args):
         label_temps = []
         test_val_all = []
         test_val_12ch_all = []
+        pearson_scores = []
         with torch.no_grad():
             for j, (x, xo, label_name, pt_index) in enumerate(test_loader):
                 x, xo = x.to(device), xo.to(device)
@@ -2461,6 +2464,24 @@ def main(args):
                 test_val_12ch = test_val_12ch.reshape(-1, args.ecg_ch_num)
                 test_val_12ch_all = test_val_12ch_all + test_val_12ch.tolist()
 
+                recon_x_np = (
+                    recon_x.view(-1, datalength).cpu().numpy().astype(np.float64)
+                )
+                xo_np = xo.view(-1, datalength).cpu().numpy().astype(np.float64)
+                print(recon_x_np)
+                print(xo_np)
+                print(recon_x_np.shape)
+                print(xo_np.shape)
+                r, _ = pearsonr(
+                    recon_x_np.ravel(),
+                    xo_np.ravel(),
+                )
+                # print(recon_x_np.ravel())
+                # print(xo_np.ravel())
+                print(r)
+                # time.sleep(1000)
+                pearson_scores.append(r)
+
                 acc_rmae_per_batch = test_val
 
                 sample_rate = 500
@@ -2513,6 +2534,7 @@ def main(args):
         print(test_val_12ch_all.shape)
         test_val_12ch_mean = np.mean(test_val_12ch_all, axis=0)
         print(test_val_12ch_mean.shape)
+        pearson_score = np.mean(pearson_scores)
         data_to_write = {
             "TARGET_NAME": args.TARGET_NAME,
             "MAE_all": test_val_mean,
@@ -2524,6 +2546,7 @@ def main(args):
             "MAE_V4": test_val_12ch_mean[5],
             "MAE_V5": test_val_12ch_mean[6],
             "MAE_V6": test_val_12ch_mean[7],
+            "pearson_score": pearson_score,
         }
         # write_to_csv(file_path='cross_val_results/Datasets={},MAE={}.csv'.format(args.Dataset_name,args.loss_pt_on_off),data=data_to_write)
         output_file = os.path.join(
@@ -2736,7 +2759,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0514_1420_z8_alpha2000_vae"
+    current_time = "0516_1420_z8_vae"
 
     parser = argparse.ArgumentParser()
     # parser.add_argument("--augumentation", type=str, default="")
