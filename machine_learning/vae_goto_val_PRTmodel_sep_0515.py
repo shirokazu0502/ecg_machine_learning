@@ -1860,6 +1860,108 @@ def compute_pearson(xo, recon_x):
     return pearson_corr
 
 
+def weighted_average_join(
+    recon_x_p,
+    recon_x_r,
+    recon_x_t,
+    p_end_orig=170,
+    r_start_orig=170,
+    r_end_orig=230,
+    t_start_orig=230,
+    overlap_pr=10,
+    overlap_rt=10,
+):
+    """
+    P波、R波、T波の再構成波形を、オーバーラップ区間で加重平均して結合する関数。
+
+    Args:
+        recon_x_p (torch.Tensor): P波成分の再構成波形 (batch, channels, length)
+        recon_x_r (torch.Tensor): R波成分の再構成波形 (batch, channels, length)
+        recon_x_t (torch.Tensor): T波成分の再構成波形 (batch, channels, length)
+        p_end_orig (int): 元のP波区間の終了インデックス (このインデックスの手前までがP支配的)
+        r_start_orig (int): 元のR波区間の開始インデックス
+        r_end_orig (int): 元のR波区間の終了インデックス (このインデックスの手前までがR支配的)
+        t_start_orig (int): 元のT波区間の開始インデックス
+        overlap_pr (int): P波とR波のオーバーラップ区間の長さ
+        overlap_rt (int): R波とT波のオーバーラップ区間の長さ
+
+    Returns:
+        torch.Tensor: 結合されたECG波形 (batch, channels, length)
+    """
+
+    final_recon_x = torch.zeros_like(recon_x_p)
+    # --- P波とR波の結合 ---
+    # P波が支配的な区間 (オーバーラップ開始前まで)
+    p_dominant_end = p_end_orig - overlap_pr // 2
+    final_recon_x[:, :, :p_dominant_end] = recon_x_p[:, :, :p_dominant_end]
+
+    # P波とR波のオーバーラップ区間
+    pr_overlap_start = p_dominant_end
+    pr_overlap_end = r_start_orig + overlap_pr // 2
+
+    weights_p_fade_out = torch.linspace(
+        1, 0, steps=overlap_pr, device=recon_x_p.device
+    ).view(1, 1, -1)
+    weights_r_fade_in = torch.linspace(
+        0, 1, steps=overlap_pr, device=recon_x_p.device
+    ).view(1, 1, -1)
+    # オーバーラップ区間での加重平均
+    # P波側は p_dominant_end から overlap_pr 分
+    # R波側は r_start_orig - overlap_pr // 2 から overlap_pr 分
+    # 実際のインデックス範囲は、p_dominant_end から p_dominant_end + overlap_pr
+    p_segment_for_pr_overlap = recon_x_p[
+        :, :, pr_overlap_start : pr_overlap_start + overlap_pr
+    ]
+    r_segment_for_pr_overlap = recon_x_r[
+        :, :, pr_overlap_start : pr_overlap_start + overlap_pr
+    ]  # R波も同じ区間から特徴を取る
+    final_recon_x[:, :, pr_overlap_start : pr_overlap_start + overlap_pr] = (
+        p_segment_for_pr_overlap * weights_p_fade_out
+        + r_segment_for_pr_overlap * weights_r_fade_in
+    )
+
+    # --- R波が支配的な区間 (P-Rオーバーラップ終了後からR-Tオーバーラップ開始前まで) ---
+    r_dominant_start = pr_overlap_start + overlap_pr
+    r_dominant_end = r_end_orig - overlap_rt // 2
+    final_recon_x[:, :, r_dominant_start:r_dominant_end] = recon_x_r[
+        :, :, r_dominant_start:r_dominant_end
+    ]
+
+    # --- R波とT波の結合 ---
+    # R波とT波のオーバーラップ区間
+    rt_overlap_start = r_dominant_end
+    # rt_overlap_end = t_start_orig + overlap_rt // 2 # r_end_orig + overlap_rt // 2
+
+    weights_r_fade_out = torch.linspace(
+        1, 0, steps=overlap_rt, device=recon_x_r.device
+    ).view(1, 1, -1)
+    weights_t_fade_in = torch.linspace(
+        0, 1, steps=overlap_rt, device=recon_x_t.device
+    ).view(1, 1, -1)
+
+    # オーバーラップ区間での加重平均
+    # R波側は r_dominant_end から overlap_rt 分
+    # T波側は t_start_orig - overlap_rt // 2 から overlap_rt 分
+    # 実際のインデックス範囲は、r_dominant_end から r_dominant_end + overlap_rt
+    r_segment_for_rt_overlap = recon_x_r[
+        :, :, rt_overlap_start : rt_overlap_start + overlap_rt
+    ]
+    t_segment_for_rt_overlap = recon_x_t[
+        :, :, rt_overlap_start : rt_overlap_start + overlap_rt
+    ]  # T波も同じ区間から特徴を取る
+
+    final_recon_x[:, :, rt_overlap_start : rt_overlap_start + overlap_rt] = (
+        r_segment_for_rt_overlap * weights_r_fade_out
+        + t_segment_for_rt_overlap * weights_t_fade_in
+    )
+
+    # --- T波が支配的な区間 (R-Tオーバーラップ終了後から最後まで) ---
+    t_dominant_start = rt_overlap_start + overlap_rt
+    final_recon_x[:, :, t_dominant_start:] = recon_x_t[:, :, t_dominant_start:]
+
+    return final_recon_x
+
+
 def individual_test_vae(
     test_loader, vae, device, ts, ecg_ch_names, args, label_name, epoch
 ):
@@ -1955,23 +2057,44 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
             print(
                 f"mean_t:{mean_t}, log_var_t:{log_var_t}, z_t:{z_t}, recon_x_t:{recon_x_t}"
             )
-            before_r_index = 170
-            after_r_index = 230
-            recon_x = recon_x_p.view(-1, ecg_ch, datalength)
+            # before_r_index = 170
+            # after_r_index = 230
+            # パラメータ設定
+            p_end_original = 170  # P波の終わり（元々の区切り）
+            r_start_original = 170  # R波の始まり（元々の区切り）
+            r_end_original = 230  # R波の終わり（元々の区切り）
+            t_start_original = 230  # T波の始まり（元々の区切り）
+            overlap_duration_pr = (
+                20  # P波とR波のオーバーラップする点数 (10+10=20を想定)
+            )
+            overlap_duration_rt = 20  # R波とT波のオーバーラップする点数
+
+            recon_x = weighted_average_join(
+                recon_x_p,
+                recon_x_r,
+                recon_x_t,
+                p_end_orig=p_end_original,
+                r_start_orig=r_start_original,
+                r_end_orig=r_end_original,
+                t_start_orig=t_start_original,
+                overlap_pr=overlap_duration_pr,
+                overlap_rt=overlap_duration_rt,
+            )
+            # recon_x = recon_x_p.view(-1, ecg_ch, datalength)
             # before_r_indexより前のデータはrecon_x_pのデータを活用
-            x_before_R = recon_x_p.view(-1, ecg_ch, datalength)[:, :, :before_r_index]
-            recon_x[:, :, :before_r_index] = x_before_R
-            # R波の部分はbefore_r_indexからafter_r_indexまでのデータを活用
-            recon_x_r = recon_x_r.view(-1, ecg_ch, datalength)
-            x_R = recon_x_r.view(-1, ecg_ch, datalength)[
-                :, :, before_r_index:after_r_index
-            ]
-            recon_x[:, :, before_r_index:after_r_index] = x_R
-            # after_r_indexより後のデータはrecon_x_tのデータを活用
-            x_after_R = recon_x_t.view(-1, args.ecg_ch_num, datalength)[
-                :, :, after_r_index:
-            ]
-            recon_x[:, :, after_r_index:] = x_after_R
+            # x_before_R = recon_x_p.view(-1, ecg_ch, datalength)[:, :, :before_r_index]
+            # recon_x[:, :, :before_r_index] = x_before_R
+            # # R波の部分はbefore_r_indexからafter_r_indexまでのデータを活用
+            # recon_x_r = recon_x_r.view(-1, ecg_ch, datalength)
+            # x_R = recon_x_r.view(-1, ecg_ch, datalength)[
+            #     :, :, before_r_index:after_r_index
+            # ]
+            # recon_x[:, :, before_r_index:after_r_index] = x_R
+            # # after_r_indexより後のデータはrecon_x_tのデータを活用
+            # x_after_R = recon_x_t.view(-1, args.ecg_ch_num, datalength)[
+            #     :, :, after_r_index:
+            # ]
+            # recon_x[:, :, after_r_index:] = x_after_R
 
             # print(label_name)
             for i in range(len(label_name)):
@@ -2106,7 +2229,10 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
 
 
 def main(args):
-    # ==============================================goto=======================
+    base_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    sys.path.append(base_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)

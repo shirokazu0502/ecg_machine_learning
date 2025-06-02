@@ -3561,7 +3561,7 @@ if __name__ == "__main__":
     args.peak_method = (
         "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
     )
-    args.pos = "back"
+    args.pos = "0"
     args.type = ""
     args.dir_name = "{}/{}".format(args.name, args.type)
     args.png_path = ""
