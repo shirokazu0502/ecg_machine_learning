@@ -45,10 +45,11 @@ HPF_FP = 2.0
 HPF_FS = 1.0
 # DATASET_MADE_DATE="0120" #packet_loss_data_{}の部分
 # DATASET_MADE_DATE="icce0116" #packet_loss_data_{}の部分
-# RATE_12ch=500
-RATE_12ch = RATE
+# RATE_12ch=1000
+RATE_12ch = 1000
 # RATE_16CH=122.06
-# RATE=500
+# RATE=1000
+RATE = 1000
 # TIME=24  #記録時間は24秒または10秒
 
 
@@ -122,7 +123,7 @@ def data_plot_after_splitting2(
     npeaks: int,
     target_name: str,
     label_list: list,
-    sampling_rate: float = 500,
+    sampling_rate: float = 1000,
     figtitle: str = "title",
     savefig: bool = True,
     figpath: str = "./plot_target",
@@ -602,11 +603,24 @@ class ArrayComparator:
             if mse < min_mse:
                 min_mse = mse
                 best_index = i
+                # 最終ピークのスタートとの時間差分を記録
+                final_diff = abs(
+                    (time1[target + small_size - 1] - time1[target])
+                    - (time2[best_index + small_size - 1] - time2[best_index])
+                )
+                print(time1, time2, best_index, target, small_size)
+                print(
+                    final_diff,
+                    time1[target + small_size - 1],
+                    time2[best_index + small_size - 1],
+                )
+                # time.sleep(100)
         print("12chの最初のピークのtime={}".format(time1[target]))
         print("16chの対応するピークのtime={}".format(time2[best_index]))
         cut_time = time2[best_index] - time1[target]
         print("差分={}".format(cut_time))
-        return cut_time
+        print(final_diff, time1, time2)
+        return cut_time, final_diff
 
     # def find_best_cut_time(self):
     #     cut_min_max_range = self.cut_min_max_range
@@ -649,7 +663,7 @@ class ArrayComparator:
     #     return corr_max_time
 
     def peak_diff_plot_move(self, cut_time):
-        cut_time = self.find_best_cut_time()
+        cut_time, final_diff = self.find_best_cut_time()
         time1, time2, diff1, diff2 = self.cul_diff()
         time1_v2 = time1 + cut_time
         print("cut_time", cut_time)
@@ -1669,14 +1683,14 @@ def plot_heartbeats_sotoume(data, num, p_onset, t_offset):
     # 最初のグラフ（8プロット）
     ax1 = fig.add_subplot(2, 1, 1)
     ax2 = fig.add_subplot(2, 1, 2)
-    sample_rate = 500
+    sample_rate = 1000
     dt = 1 / sample_rate
     plot_time = np.arange(len(df_12ch_data)) * dt
     # for i,column_8ch in enumerate(colums_8ch_name):
     #     ax1.plot(plot_time, df_12ch_data[column_8ch], linewidth=1.5, linestyle="-", label=column_8ch,c=cool_colors[i])
     ax1.plot(plot_time, df_12ch_data["A2"], linewidth=1.5, linestyle="-", label="A2")
     ax1.scatter(
-        p_onset / 500,
+        p_onset / 1000,
         df_12ch_data.loc[p_onset, "A2"],
         marker="^",
         alpha=0.7,
@@ -1684,7 +1698,7 @@ def plot_heartbeats_sotoume(data, num, p_onset, t_offset):
         c="b",
     )
     ax1.scatter(
-        t_offset / 500,
+        t_offset / 1000,
         df_12ch_data.loc[t_offset, "A2"],
         marker="v",
         alpha=0.7,
@@ -1738,11 +1752,11 @@ def plot_heartbeats(data, num):
     for i in np.linspace(0, 1, 15):
         warm_colors.append(plt.cm.Oranges(i))
     # cool_colors = ['#0000FF', '#00FFFF', '#ADD8E6', '#000080', '#008080', '#4682B4', '#00CED1', '#191970']
-    # warm_colors = ['#FF0000', '#FFA500', '#FF8C00', '#FF7F50', '#FF6347', '#FF4500', '#FFD700', '#FFFF00', '#FFFFE0', '#FFDAB9', '#EEE8AA', '#F0E68C', '#BDB76B', '#DAA520', '#B8860B']
+    # warm_colors = ['#FF0000', '#FFA1000', '#FF8C00', '#FF7F50', '#FF6347', '#FF41000', '#FFD700', '#FFFF00', '#FFFFE0', '#FFDAB9', '#EEE8AA', '#F0E68C', '#BDB76B', '#DAA520', '#B8860B']
     # 最初のグラフ（8プロット）
     ax1 = fig.add_subplot(2, 1, 1)
     ax2 = fig.add_subplot(2, 1, 2)
-    sample_rate = 500
+    sample_rate = 1000
     dt = 1 / sample_rate
     plot_time = np.arange(len(df_12ch_data)) * dt
     # for i,column_8ch in enumerate(colums_8ch_name):
@@ -1919,8 +1933,8 @@ class HeartbeatCutter_prt:
             # data = self.con_data[
             #     center_idx - self.range : center_idx + self.range
             # ].copy()
-            start_idx = center_idx - 150
-            end_idx = start_idx + 400
+            start_idx = center_idx - 300
+            end_idx = start_idx + 800
             data = self.con_data[start_idx:end_idx].copy()
             # インデックス振り直し
             data.reset_index(inplace=True, drop=True)
@@ -1955,7 +1969,7 @@ class HeartbeatCutter_prt:
             for j, column in enumerate(data.columns):
                 # フィルタかける
                 data[column] = nk.ecg_clean(
-                    data[column], sampling_rate=500, method="neurokit"
+                    data[column], sampling_rate=1000, method="neurokit"
                 )
                 # pt_extendを実施
                 # インデックスp_onsetの値を取得
@@ -2168,7 +2182,7 @@ def validate_integer_input():
 
 def PQRST_plot_one(ecg, sampling_rate, header):
     ecg_signal = ecg
-    ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=500, method="neurokit")
+    ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=1000, method="neurokit")
     print(ecg_signal)
     _, rpeaks = nk.ecg_peaks(ecg_signal, sampling_rate)
     _, waves_peak = nk.ecg_delineate(
@@ -2232,7 +2246,7 @@ def PQRST_plot_grid_16ch(ecg_list, sampling_rate, headers, args):
     fig, axes = plt.subplots(5, 3, figsize=(15, 12))
 
     for i, (ecg_signal, title) in enumerate(zip(ecg_list, headers)):
-        ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=500, method="neurokit")
+        ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=1000, method="neurokit")
         # print(ecg_signal)
         rpeaks = nk.ecg_peaks(ecg_signal, sampling_rate)[1][
             "ECG_R_Peaks"
@@ -2333,7 +2347,7 @@ def PQRST_plot_grid(ecg_list, sampling_rate, headers, args):
     fig, axes = plt.subplots(4, 3, figsize=(15, 12))
 
     for i, (ecg_signal, title) in enumerate(zip(ecg_list, headers)):
-        ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=500, method="neurokit")
+        ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=1000, method="neurokit")
         # print(ecg_signal)
         rpeaks = nk.ecg_peaks(ecg_signal, sampling_rate)[1][
             "ECG_R_Peaks"
@@ -2579,7 +2593,7 @@ def PTwave_search(ecg_A2, sampling_rate, header, args, time_length):
     )
     data_list = []
     for rpeak in rpeaks:
-        # 2秒間きりだすために500Hz×1秒=500インデックス前後に存在するpqrだけを使う。
+        # 2秒間きりだすために1000Hz×1秒=1000インデックス前後に存在するpqrだけを使う。
         if rpeak > int(0.5 * time_length * sampling_rate) and rpeak < 12000 - int(
             0.5 * time_length * sampling_rate
         ):
@@ -2892,7 +2906,7 @@ def PTwave_search3(
             rpeak_next = 10000000000000
         else:
             rpeak_next = rpeaks[i + 1]
-        # 2秒間きりだすために500Hz×0.8秒=400インデックス前後に存在するpqrだけを使う。
+        # 2秒間きりだすために1000Hz×0.8秒=400インデックス前後に存在するpqrだけを使う。
         if rpeak > int(0.5 * time_length * sampling_rate) and rpeak < len(
             ecg_all
         ) - int(0.5 * time_length * sampling_rate):
@@ -3005,7 +3019,8 @@ def PTwave_search3(
                 #         t_Peaks_ele,
                 #     ]
                 # )
-                points = plot_and_select_all_points(ecg_all, rpeak)
+                window = int(RATE * time_length / 2)  # 0.5秒
+                points = plot_and_select_all_points(ecg_all, rpeak, window)
                 (
                     p_Onset_ele,
                     p_Peaks_ele,
@@ -3051,7 +3066,7 @@ def PTwave_plot(ecg_list, sampling_rate, headers, args):
     fig, axes = plt.subplots(4, 3, figsize=(15, 12))
 
     for i, (ecg_signal, title) in enumerate(zip(ecg_list, headers)):
-        ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=500, method="neurokit")
+        ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=1000, method="neurokit")
         # print(ecg_signal)
         rpeaks = nk.ecg_peaks(ecg_signal, sampling_rate)[1][
             "ECG_R_Peaks"
@@ -3152,23 +3167,23 @@ def ecg_clean_df_16ch(df_16ch, rate):
         ecg_signal = df_16ch[column].copy().values
         ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=rate, method="neurokit")
         df_16ch_cleaned[column] = ecg_signal
-    fig = plt.figure(num=None, figsize=(12, 5), dpi=100, facecolor="w", edgecolor="k")
-    axis_line_width = 2.0
-    tick_label_size = 18
+    # fig = plt.figure(num=None, figsize=(12, 5), dpi=100, facecolor="w", edgecolor="k")
+    # axis_line_width = 2.0
+    # tick_label_size = 18
     # 最初のグラフ（8プロット）
-    plot_time = np.arange(len(df_16ch)) / RATE_16CH
-    ax1 = fig.add_subplot(1, 1, 1)
-    ax1.plot(plot_time, df_16ch["ch_1"], label="ch_1")
-    ax1.plot(plot_time, df_16ch_cleaned["ch_1"], label="filtered ch1")
-    # ax1.legend(fontsize=12, ncol=1)
-    ax1.legend(loc="upper right", fontsize=18, ncol=1, bbox_to_anchor=(1, 1))
-    ax1.tick_params(labelsize=tick_label_size, direction="in")
-    plt.xlim(3.8, 8)
-    plt.ylim(-100, 200)
-    for axis in ["top", "bottom", "left", "right"]:
-        ax1.spines[axis].set_linewidth(axis_line_width)
-    plt.tight_layout()
-    plt.show()
+    # plot_time = np.arange(len(df_16ch)) / RATE_16CH
+    # ax1 = fig.add_subplot(1, 1, 1)
+    # ax1.plot(plot_time, df_16ch["ch_1"], label="ch_1")
+    # ax1.plot(plot_time, df_16ch_cleaned["ch_1"], label="filtered ch1")
+    # # ax1.legend(fontsize=12, ncol=1)
+    # ax1.legend(loc="upper right", fontsize=18, ncol=1, bbox_to_anchor=(1, 1))
+    # ax1.tick_params(labelsize=tick_label_size, direction="in")
+    # plt.xlim(3.8, 8)
+    # plt.ylim(-100, 200)
+    # for axis in ["top", "bottom", "left", "right"]:
+    #     ax1.spines[axis].set_linewidth(axis_line_width)
+    # plt.tight_layout()
+    # plt.show()
     return df_16ch_cleaned
 
 
@@ -3218,22 +3233,18 @@ def main(args):
     # TARGET_CHANNEL_16ch=args.TARGET_CHANNEL_16ch
     TARGET_CHANNEL_12CH = args.TARGET_CHANNEL_12CH
     cut_min_max_range = args.cut_min_max_range
-    # ファイル読み込み
-    # dir_path = "./0_packetloss_data/"+args.dir_name
-    # dir_path = "./0_packetloss_data_{}/".format(DATASET_MADE_DATE)+args.dir_name
-    # dir_path = args.dataset_dir
     dir_path = args.raw_datas_dir
     csv_reader_16ch = CSVReader_16ch(dir_path)
     df_16ch = csv_reader_16ch.process_files()
     print(df_16ch)
     cols = df_16ch.columns
-    # df_15ch = pd.DataFrame()
-    # for col in cols:
-    #     df_15ch[col] = df_16ch[col] - df_16ch["ch_16"]
-    # df_15ch = df_15ch.drop(columns=["ch_16"])
 
     csv_reader_12ch = CSVReader_12ch(dir_path)
     df_12ch = csv_reader_12ch.process_files()
+    # 1000Hzでリサンプリング
+    df_12ch = linear_interpolation_resample_All(
+        df=df_12ch.copy(), sampling_rate=500, new_sampling_rate=RATE
+    )
     df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
     # input("")
     # 同期用インデックスファイルを読み込みと書き込み
@@ -3242,58 +3253,67 @@ def main(args):
     if handler.check_file() == False:  # 同期するためのファイルが存在していないとき。
         reverse = args.reverse
         print("TARGET_CHNNEL_16chは")
-        # TARGET_CHANNEL_16ch = validate_integer_input()
         TARGET_CHANNEL_16ch = "ch_1"
-        # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=2.0,HPF_fs=1.0,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
-        # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=HPF_FP,HPF_fs=HPF_FS,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
-        df_16ch_pf = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
-        df_resample_16ch = linear_interpolation_resample_All(
-            df=df_16ch_pf.copy(), sampling_rate=RATE_16CH, new_sampling_rate=RATE
-        )
-        df_16ch_pf = df_resample_16ch.copy()
-        if reverse == "off":
-            sc_16ch = peak_sc_16ch(
-                df_16ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
-            )
-            peak_sc_plot(df_16ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
-        else:
-            df_16ch_reverse = df_16ch_pf.copy()
-            df_16ch_reverse[TARGET_CHANNEL_16ch] = (-1) * df_16ch_pf.copy()[
-                TARGET_CHANNEL_16ch
-            ]
-            # reverseを採用
-            df_resample_16ch = df_16ch_reverse.copy()
-            sc_16ch = peak_sc_16ch(
-                df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
-            )
-            peak_sc_plot(df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
-
         sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-        # print(sc_12ch)
-        # input()
         peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
         print("reverse=={}".format(reverse))
         # peak_sc_plot(df_16ch_pf.copy(),RATE=RATE_16CH,TARGET=TARGET_CHANNEL_16ch)
-        print(sc_16ch)
+        min_final_diff = float("inf")
 
-        comparator = ArrayComparator(
-            sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
-        )
-        comparator.peak_diff_plot()
-        cut_time = comparator.find_best_cut_time()
-        comparator.peak_diff_plot_move(cut_time)
-        # comparator.find_best_cut_time()
-        # peak_diff_plot(sc_12ch,sc_16ch)
-        Plot_16ch_pf = MultiPlotter(df_16ch_pf, RATE=RATE)
+        rate_candidates = np.arange(
+            121.2, 122.6, 0.01
+        )  # 例: 121.5Hz～122.7Hzを0.1Hz刻み
+        for rate_candidate in rate_candidates:
+            df_resample_16ch = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
+            df_resample_16ch = linear_interpolation_resample_All(
+                df=df_resample_16ch.copy(),
+                sampling_rate=rate_candidate,
+                new_sampling_rate=RATE,
+            )
+            if reverse == "off":
+                sc_16ch = peak_sc_16ch(
+                    df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+                )
+                # peak_sc_plot(df_16ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
+            else:
+                df_16ch_reverse = df_resample_16ch.copy()
+                df_16ch_reverse[TARGET_CHANNEL_16ch] = (-1) * df_resample_16ch.copy()[
+                    TARGET_CHANNEL_16ch
+                ]
+                # reverseを採用
+                df_resample_16ch = df_16ch_reverse.copy()
+                sc_16ch = peak_sc_16ch(
+                    df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+                )
+                # peak_sc_plot(
+                #     df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+                # )
+
+            comparator = ArrayComparator(
+                sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
+            )
+            cut_time, final_diff = comparator.find_best_cut_time()
+            print(final_diff, rate_candidate)
+            if final_diff < min_final_diff:
+                min_final_diff = final_diff
+                best_rate = rate_candidate
+                best_cut_time = cut_time
+                best_df_resample_16ch = df_resample_16ch.copy()
+
+        df_resample_16ch = best_df_resample_16ch.copy()
+        print(best_cut_time, best_rate)
+        peak_sc_plot(df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
+        comparator.peak_diff_plot_move(best_cut_time)
+        Plot_16ch_pf = MultiPlotter(df_resample_16ch, RATE=RATE)
         Plot_16ch_pf.multi_plot(xmin=0, xmax=100, ylim=0)
         Plot_16ch_pf.multi_plot_16ch_with_sc(xmin=0, xmax=20, ylim=0, sc=sc_16ch)
         plt.show()
         plt.close()
-        print(int(cut_time * RATE))
+        print(int(best_cut_time * RATE))
         if input("write_to_CSV OK? y or n") == "y":
             handler.write_integer(
                 RATE=RATE,
-                cut_time=cut_time,
+                cut_time=best_cut_time,
                 target_16ch=TARGET_CHANNEL_16ch,
                 reverse=reverse,
                 target_12ch=TARGET_CHANNEL_12CH,
@@ -3309,10 +3329,10 @@ def main(args):
         # df_16ch_pf = df_16ch.copy()
         print("ファイルが存在します。")
         print("fafafafa")
-        df_16ch_pf = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
+        df_resample_16ch = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
         print("aaaaaaaaaaS")
         df_resample_16ch = linear_interpolation_resample_All(
-            df=df_16ch_pf.copy(), sampling_rate=RATE_16CH, new_sampling_rate=RATE
+            df=df_resample_16ch.copy(), sampling_rate=RATE_16CH, new_sampling_rate=RATE
         )
 
     syn_index, TARGET_CHANNEL_16ch, reverse, TARGET_CHANNEL_12CH = (
@@ -3393,7 +3413,7 @@ def main(args):
         df_12ch,
         ecg_A2=ecg_A2_np,
         header="A2",
-        sampling_rate=500,
+        sampling_rate=1000,
         args=args,
         time_length=args.time_range,
         method=args.peak_method,
@@ -3493,7 +3513,7 @@ if __name__ == "__main__":
     # args.dataset_output_path = PROCESSED_DATA_DIR + "/pqrst_nkmodule_since{}_{}".format(
     #     args.dataset_made_date, args.peak_method
     # )
-    args.dataset_output_path = PROCESSED_DATA_DIR + "/for_IEEE_sensors"
+    args.dataset_output_path = PROCESSED_DATA_DIR + "/resample_1000"
     args.test_images_path = TEST_DIR + "/raw_datas_test"
     main(args)
     # dataset_images_path=''

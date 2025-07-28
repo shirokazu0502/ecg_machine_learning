@@ -163,7 +163,7 @@ def min_max(x, minth, maxth):
 
 
 def plot_fig(numplotfig, recon_x, xo, datalength, ts, args, label_name, ecg_ch_names):
-    sample_rate = 500
+    sample_rate = RATE
     sample_num = datalength
     xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
     ecg_ch = args.ecg_ch_num
@@ -242,7 +242,7 @@ def plot_fig(numplotfig, recon_x, xo, datalength, ts, args, label_name, ecg_ch_n
 def plot_fig_15ch_only(
     recon_x, datalength, ts, args, batch_size_num, label_name, pt_index
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -357,7 +357,7 @@ def plot_fig_test_name_8ch_2row(
     pt_index,
     ecg_ch_names,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -477,7 +477,7 @@ def plot_fig_test_name_8ch(
     pt_index,
     ecg_ch_names,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -591,7 +591,7 @@ def plot_fig_test_name(
     pt_index,
     ecg_ch_names,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -1034,10 +1034,13 @@ def save_csv(data, ts, args, label_name, data_rec_or_xo):
 def train_unet(
     model, train_loader, test_loader, optimizer, criterion, epochs, device, writer
 ):
-    model.train()
-    save_path = os.path.join("model_pth", "unet.pth")
+    base_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    )
+    save_path = os.path.join(base_path, "model_pth", "unet.pth")
     # early_stopping = EarlyStopping(patience=150, verbose=True, path=save_path)
     for epoch in range(epochs):
+        model.train()
         total_train_loss = 0.0
         for x, xo, _, _ in train_loader:
             x, xo = x.to(device), xo.to(device)
@@ -1157,7 +1160,7 @@ def test_unet(model, test_loader, device, args, ts):
             )
             pearson_scores.append(r)
 
-            sample_rate = 500
+            sample_rate = RATE
             sc_pt = pt_index / sample_rate
             sample_num = args.datalength
             xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
@@ -1310,6 +1313,7 @@ def main(args):
         dataset_num=args.dataset_num,
         DataAugumentation=args.p_augumentation,
         ave_data_flg=args.ave_data_flg,
+        datalength=args.datalength,
     )
     print("gotooooooooooo_end")
     # ==================================================================
@@ -1432,10 +1436,12 @@ def main(args):
             device,
             writer,
         )
-
+        base_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
         torch.save(
             unet.state_dict(),
-            os.path.join("model_pth", "unet.pth"),
+            os.path.join(base_path, "model_pth", "unet.pth"),
         )
         torch.save(
             unet.state_dict(),
@@ -1472,9 +1478,12 @@ def main(args):
         test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
         print("aaaaaaaaaaaaaaaaaa")
         print(test_loader)
+        base_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
         unet.load_state_dict(
             torch.load(
-                os.path.join("model_pth", "unet.pth"),
+                os.path.join(base_path, "model_pth", "unet.pth"),
                 map_location=lambda storage, loc: storage,
             )
         )
@@ -1528,9 +1537,12 @@ def main(args):
         test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
         print(len(test_dataset))
         pth = args.pth
+        base_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
         unet.load_state_dict(
             torch.load(
-                os.path.join("model_pth", pth),
+                os.path.join(base_path, "model_pth", pth),
                 map_location=lambda storage, loc: storage,
             )
         )
@@ -1593,7 +1605,7 @@ def main(args):
 
                     # test_val=cul_val(pt_index,acc_rmse)
 
-                    sample_rate = 500
+                    sample_rate = RATE
                     sc_pt = pt_index / sample_rate
                     sample_num = args.datalength
                     xticks = np.linspace(
@@ -1699,8 +1711,9 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0715_1430_ch16_unet_batch4"
+    current_time = "0724_1430_ch16_unet_not_patient"
 
+    datalength = int(RATE * 0.8)  # 0.8秒間のデータを使用
     parser = argparse.ArgumentParser()
     # parser.add_argument("--augumentation", type=str, default="")
     parser.add_argument("--p_augumentation", type=str, default="")
@@ -1717,10 +1730,10 @@ if __name__ == "__main__":
     # parser.add_argument("--dname", type = str ,default = "test")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=500)
-    parser.add_argument("--train_batch_size", type=int, default=64)  # default=256
+    parser.add_argument("--train_batch_size", type=int, default=16)  # default=256
     parser.add_argument("--test_batch_size", type=int, default=1)  # default=256
-    parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--datalength", type=int, default=400)
+    parser.add_argument("--learning_rate", type=float, default=0.0001)
+    parser.add_argument("--datalength", type=int, default=datalength)
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [32, 1], [64, 2]]) #畳み込み層の設定　増やしすぎると過学習の可能性　前から２ペアずつ読み込む　２つ目の[]の第二引数はストライド
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120, 2],[240,2]])#[[入力,ストライド],]
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120,2],[240,2]])#[[入力,ストライド],]

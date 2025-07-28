@@ -6,8 +6,8 @@
 # measure_names="matumoto yoshikura taniguchi kawai goto gosha nakanishi kasahara nakashimizu patient2 patient3 patient4 patient6 patient8 patient9"
 # measure_dates="1128 1130 1107 1115 1219 0407 0407 0304 0512 1001 1001 1001 1001 1109 1109"
 
-measure_names="matumoto yoshikura taniguchi kawai goto gosha nakanishi kasahara nakashimizu patient4 patient6 patient8 patient9"
-measure_dates="1128 1130 1107 1115 1219 0407 0407 0304 0512 1001 1001 1109 1109"
+measure_names="matumoto yoshikura taniguchi kawai goto gosha nakanishi kasahara nakashimizu asano noda ikejima patient4 patient6 patient8 patient9"
+measure_dates="1128 1130 1107 1115 1219 0407 0407 0304 0512 0714 0714 0714 1001 1001 1109 1109"
 
 # measure_names="matumoto yoshikura takahashi taniguchi kawai goto"
 # measure_dates="1128 1130 1220 1107 1115 1219"
@@ -41,7 +41,7 @@ ave_data_flg=1
 # done
 
 for name in $measure_names; do
-    python3 vae_goto_val_PRTmodel_sep_new.py --TARGET_NAME "$name" --epochs 300 --latent_size 4 --beta 1 --mode train --transform_type normal --Dataset_name for_Unet  --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
+    python3 vae_goto_val_PRTmodel_sep_new.py --TARGET_NAME "$name" --epochs 300 --latent_size 4 --beta 1 --mode train --transform_type normal --Dataset_name for_best_resample  --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
     # python3 vae_goto_val_PRTmodel_sep_new.py --TARGET_NAME "$name" --epochs 300 --latent_size 8 --beta 1 --mode zplot --transform_type normal --Dataset_name for_IEEE_sensors  --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
     # python3 vae_goto_val_PRTmodel_sep_new.py --TARGET_NAME "$name" --epochs 300 --latent_size 8 --beta 1 --mode test --transform_type normal --Dataset_name for_IEEE_sensors --loss_pt_on_off off --loss_pt_on_off_R_weight "$R_weight" --p_augumentation "$p_augumentation" --r_augumentation "$r_augumentation" --t_augumentation "$t_augumentation" --loss_pt_on_off_P_weight "$P_weight" --loss_pt_on_off_T_weight "$T_weight" --ave_data_flg $ave_data_flg
 done

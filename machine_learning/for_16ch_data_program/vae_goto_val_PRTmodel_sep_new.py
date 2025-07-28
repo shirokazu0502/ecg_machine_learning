@@ -337,7 +337,7 @@ def fourier(x, ch=8, dt=0.002, datalength=400, batch_size=4):
 
 
 def plot_fig(numplotfig, recon_x, xo, datalength, ts, args, label_name, ecg_ch_names):
-    sample_rate = 500
+    sample_rate = RATE
     sample_num = datalength
     xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
     ecg_ch = args.ecg_ch_num
@@ -416,7 +416,7 @@ def plot_fig(numplotfig, recon_x, xo, datalength, ts, args, label_name, ecg_ch_n
 def plot_fig_train(
     recon_x, xo, datalength, ts, args, iteration_num, batch_size_num, epoch_num
 ):
-    sample_rate = 500
+    sample_rate = RATE
     sample_num = 750
     xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
     ecg_ch = args.ecg_ch_num
@@ -499,7 +499,7 @@ def plot_fig_train_name(
     epoch_num,
     label_name,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     sample_num = args.datalength
     xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
     ecg_ch = args.ecg_ch_num
@@ -580,7 +580,7 @@ def plot_fig_train_name(
 def plot_fig_16ch_only(
     recon_x, datalength, ts, args, batch_size_num, label_name, pt_index
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -695,7 +695,7 @@ def plot_fig_test_name_8ch_2row(
     pt_index,
     ecg_ch_names,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -815,7 +815,7 @@ def plot_fig_test_name_8ch(
     pt_index,
     ecg_ch_names,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -929,7 +929,7 @@ def plot_fig_test_name(
     pt_index,
     ecg_ch_names,
 ):
-    sample_rate = 500
+    sample_rate = RATE
     # sample_num=750
     sample_num = args.datalength
     dt = 1 / sample_rate
@@ -1150,8 +1150,8 @@ def loss_fn_mse_PRT(
         # index2 = S_peaks[i]
         # print(index1)
         # print(index2)
-        index1 = 130  # q波ピークから5つ後ろをR_onsetとする
-        index2 = 170  # s波ピークから5つ前をR_offsetとする
+        index1 = int(0.325 * datalength)
+        index2 = int(0.425 * datalength)
         recon_x_before_R1 = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, :index1]
         recon_x_after_R2 = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, index2:]
         x_before_R1 = x.view(-1, args.ecg_ch_num, datalength)[i, :, :index1]
@@ -2045,14 +2045,16 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
                 f"mean_t:{mean_t}, log_var_t:{log_var_t}, z_t:{z_t}, recon_x_t:{recon_x_t}"
             )
             # パラメータ設定
-            p_end_original = 170  # P波の終わり（元々の区切り）
-            r_start_original = 170  # R波の始まり（元々の区切り）
-            r_end_original = 230  # R波の終わり（元々の区切り）
-            t_start_original = 230  # T波の始まり（元々の区切り）
-            overlap_duration_pr = (
-                20  # P波とR波のオーバーラップする点数 (10+10=20を想定)
-            )
-            overlap_duration_rt = 20  # R波とT波のオーバーラップする点数
+            p_end_original = int(0.325 * datalength)  # P波の終わり（元々の区切り）
+            r_start_original = int(0.425 * datalength)  # R波の始まり（元々の区切り）
+            r_end_original = int(0.525 * datalength)  # R波の終わり（元々の区切り）
+            t_start_original = int(0.525 * datalength)  # T波の始まり（元々の区切り）
+            overlap_duration_pr = int(
+                0.05 * datalength
+            )  # P波とR波のオーバーラップする点数 (10+10=20を想定)
+            overlap_duration_rt = int(
+                0.05 * datalength
+            )  # R波とT波のオーバーラップする点数
 
             recon_x = weighted_average_join(
                 recon_x_p,
@@ -2126,7 +2128,7 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
 
             acc_rmae_per_batch = test_val
 
-            sample_rate = 500
+            sample_rate = RATE
             sc_pt = pt_index / sample_rate
             sample_num = args.datalength
             xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
@@ -2293,6 +2295,7 @@ def main(args):
             dataset_num=args.dataset_num,
             DataAugumentation=args.p_augumentation,
             ave_data_flg=args.ave_data_flg,
+            datalength=args.datalength,
         )
     )
     train_dataset_dict["R_train_dataset"], test_dataset_dict["R_test_dataset"] = (
@@ -2303,6 +2306,7 @@ def main(args):
             dataset_num=args.dataset_num,
             DataAugumentation=args.r_augumentation,
             ave_data_flg=args.ave_data_flg,
+            datalength=args.datalength,
         )
     )
     train_dataset_dict["T_train_dataset"], test_dataset_dict["T_test_dataset"] = (
@@ -2313,6 +2317,7 @@ def main(args):
             dataset_num=args.dataset_num,
             DataAugumentation=args.t_augumentation,
             ave_data_flg=args.ave_data_flg,
+            datalength=args.datalength,
         )
     )
     # 最終的にテストを行うためのデータセット(本質的にはどれも同じなので適当にR波を採用)
@@ -2458,7 +2463,10 @@ def main(args):
             label_temps = []
             train_acc_temps = []
             test_acc_temps = []
-            save_path = os.path.join("model_pth", "vae_sep.pth")
+            base_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..")
+            )
+            save_path = os.path.join(base_path, "model_pth", "vae_sep.pth")
             early_stopping = EarlyStopping(patience=300, verbose=True, path=save_path)
             for epoch in range(args.epochs):
                 vae.train()
@@ -2636,10 +2644,13 @@ def main(args):
                 #     data_to_write["pearson_score"],
                 #     epoch,
                 # )
-
+            base_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..")
+            )
             if target_weight == "P":
                 torch.save(
-                    vae.state_dict(), os.path.join("model_pth", "vae_pwave_weight.pth")
+                    vae.state_dict(),
+                    os.path.join(base_path, "model_pth", "vae_pwave_weight.pth"),
                 )
                 torch.save(
                     vae.state_dict(),
@@ -2647,7 +2658,8 @@ def main(args):
                 )
             elif target_weight == "R":
                 torch.save(
-                    vae.state_dict(), os.path.join("model_pth", "vae_rwave_weight.pth")
+                    vae.state_dict(),
+                    os.path.join(base_path, "model_pth", "vae_rwave_weight.pth"),
                 )
                 torch.save(
                     vae.state_dict(),
@@ -2655,7 +2667,8 @@ def main(args):
                 )
             elif target_weight == "T":
                 torch.save(
-                    vae.state_dict(), os.path.join("model_pth", "vae_twave_weight.pth")
+                    vae.state_dict(),
+                    os.path.join(base_path, "model_pth", "vae_twave_weight.pth"),
                 )
                 torch.save(
                     vae.state_dict(),
@@ -2775,8 +2788,8 @@ def main(args):
                 print(
                     f"mean_t:{mean_t}, log_var_t:{log_var_t}, z_t:{z_t}, recon_x_t:{recon_x_t}"
                 )
-                before_r_index = 130
-                after_r_index = 170
+                before_r_index = int(0.325 * datalength)
+                after_r_index = int(0.425 * datalength)
                 recon_x = recon_x_p.view(-1, ecg_ch, datalength)
                 # before_r_indexより前のデータはrecon_x_pのデータを活用
                 x_before_R = recon_x_p.view(-1, ecg_ch, datalength)[
@@ -2844,7 +2857,7 @@ def main(args):
 
                 acc_rmae_per_batch = test_val
 
-                sample_rate = 500
+                sample_rate = RATE
                 sc_pt = pt_index / sample_rate
                 sample_num = args.datalength
                 xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
@@ -3006,7 +3019,7 @@ def main(args):
 
                     # test_val=cul_val(pt_index,acc_rmse)
 
-                    sample_rate = 500
+                    sample_rate = RATE
                     sc_pt = pt_index / sample_rate
                     sample_num = args.datalength
                     xticks = np.linspace(
@@ -3117,8 +3130,9 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0714_compare_unet"
+    current_time = "0722_compare_unet_500hz"
 
+    datalength = int(RATE * 0.8)  # 0.8秒間のデータを使用
     parser = argparse.ArgumentParser()
     # parser.add_argument("--augumentation", type=str, default="")
     parser.add_argument("--p_augumentation", type=str, default="")
@@ -3138,7 +3152,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_batch_size", type=int, default=16)  # default=256
     parser.add_argument("--val_batch_size", type=int, default=1)  # default=256
     parser.add_argument("--learning_rate", type=float, default=0.0005)
-    parser.add_argument("--datalength", type=int, default=400)
+    parser.add_argument("--datalength", type=int, default=datalength)
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [32, 1], [64, 2]]) #畳み込み層の設定　増やしすぎると過学習の可能性　前から２ペアずつ読み込む　２つ目の[]の第二引数はストライド
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120, 2],[240,2]])#[[入力,ストライド],]
     # parser.add_argument("--enc_convlayer_sizes", type=list, default=[[16, 1], [30, 2],[60, 2],[120,2],[240,2]])#[[入力,ストライド],]

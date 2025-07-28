@@ -2312,10 +2312,13 @@ def main(args):
                     bce_keep,
                     epoch,
                 )
-
+            base_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..")
+            )
             if target_weight == "P":
                 torch.save(
-                    vae.state_dict(), os.path.join("model_pth", "vae_pwave_weight.pth")
+                    vae.state_dict(),
+                    os.path.join(base_path, "model_pth", "vae_pwave_weight.pth"),
                 )
                 torch.save(
                     vae.state_dict(),
@@ -2323,7 +2326,8 @@ def main(args):
                 )
             elif target_weight == "R":
                 torch.save(
-                    vae.state_dict(), os.path.join("model_pth", "vae_rwave_weight.pth")
+                    vae.state_dict(),
+                    os.path.join(base_path, "model_pth", "vae_rwave_weight.pth"),
                 )
                 torch.save(
                     vae.state_dict(),
@@ -2331,7 +2335,8 @@ def main(args):
                 )
             elif target_weight == "T":
                 torch.save(
-                    vae.state_dict(), os.path.join("model_pth", "vae_twave_weight.pth")
+                    vae.state_dict(),
+                    os.path.join(base_path, "model_pth", "vae_twave_weight.pth"),
                 )
                 torch.save(
                     vae.state_dict(),
@@ -2457,21 +2462,24 @@ def main(args):
         print(test_loader)
         # input()
         # P波、R波、T波のVAEをそれぞれ読み込む
+        base_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
         vae_dict["P"].load_state_dict(
             torch.load(
-                os.path.join("model_pth", "vae_pwave_weight.pth"),
+                os.path.join(base_path, "model_pth", "vae_pwave_weight.pth"),
                 map_location=lambda storage, loc: storage,
             )
         )
         vae_dict["R"].load_state_dict(
             torch.load(
-                os.path.join("model_pth", "vae_rwave_weight.pth"),
+                os.path.join(base_path, "model_pth", "vae_rwave_weight.pth"),
                 map_location=lambda storage, loc: storage,
             )
         )
         vae_dict["T"].load_state_dict(
             torch.load(
-                os.path.join("model_pth", "vae_twave_weight.pth"),
+                os.path.join(base_path, "model_pth", "vae_twave_weight.pth"),
                 map_location=lambda storage, loc: storage,
             )
         )
@@ -2700,9 +2708,12 @@ def main(args):
         test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
         print(len(test_dataset))
         pth = args.pth
+        base_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        )
         vae.load_state_dict(
             torch.load(
-                os.path.join("model_pth", pth),
+                os.path.join(base_path, "model_pth", pth),
                 map_location=lambda storage, loc: storage,
             )
         )

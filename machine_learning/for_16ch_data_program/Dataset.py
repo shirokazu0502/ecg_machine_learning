@@ -112,7 +112,7 @@ def data_plot_after_splitting2(
     npeaks: int,
     target_name: str,
     label_list: list,
-    sampling_rate: float = 500,
+    sampling_rate: float = RATE,
     figtitle: str = "title",
     savefig: bool = True,
     figpath: str = "./plot_target",
@@ -246,7 +246,7 @@ def data_plot_after_splitting(
     doppler_list: list,
     npeaks: int,
     target_name: str,
-    sampling_rate: float = 500,
+    sampling_rate: float = RATE,
     figtitle: str = "title",
     savefig: bool = True,
     figpath: str = "./plot_target",
@@ -1658,8 +1658,8 @@ def Dataset_setup_8ch_pt_augmentation(
     dataset_num,
     DataAugumentation,
     ave_data_flg,
+    datalength=400,
 ):
-    datalength = 400
     ecg_ch_num = 8
     Data = []
     PGV_train_set = []
