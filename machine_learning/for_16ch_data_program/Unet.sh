@@ -7,8 +7,8 @@
 # measure_dates="1130 1107 1115 1219 0407 0407 0304 1001 1001 1001 1109 1109"
 # measure_names="matumoto yoshikura takahashi taniguchi kawai goto"
 # measure_dates="1128 1130 1220 1107 1115 1219"
-measure_names="matumoto yoshikura taniguchi kawai goto gosha nakanishi kasahara nakashimizu asano noda ikejima"
-measure_dates="1128 1130 1107 1115 1219 0407 0407 0304 0512 0714 0714 0714"
+measure_names="matumoto yoshikura taniguchi kawai goto gosha kasahara nakashimizu asano noda ikejima patient4 patient6 patient8 patient9"
+measure_dates="1128 1130 1107 1115 1219 0407 0304 0512 0714 0714 0714 1001 1001 1109 1109"
 dataset_date="0602"
 subject_group="1"
 #再構成項のP波，R波,T波部分の重みを変更できる。
@@ -23,14 +23,14 @@ p_augumentation="" #PR部分の延長短縮と高さを変えるデータ拡張�
 r_augumentation="" #PR部分の延長短縮と高さを変えるデータ拡張を行う。
 t_augumentation="" #ST部分の延長短縮と高さを変えるデータ拡張を行う。
 ave_data_flg=1
-train_batch_sizes="64"
+train_batch_sizes="128"
 learning_rates="0.0001"
 
 for train_batch_size in $train_batch_sizes; do
     for learning_rate in $learning_rates; do
         for name in $measure_names; do
-            python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 3000 --beta 1 --mode train --transform_type normal --Dataset_name for_best_resample --loss_pt_on_off off --ave_data_flg $ave_data_flg --train_batch_size "$train_batch_size" --learning_rate "$learning_rate"
-            python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 3000 --beta 1 --mode test --transform_type normal --Dataset_name for_best_resample --loss_pt_on_off off  --ave_data_flg $ave_data_flg --train_batch_size "$train_batch_size" --learning_rate "$learning_rate"
+            python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 2000 --beta 1 --mode train --transform_type normal --Dataset_name for_best_resample --loss_pt_on_off off --ave_data_flg $ave_data_flg --train_batch_size "$train_batch_size" --learning_rate "$learning_rate"
+            python3 unet_goto_val.py --TARGET_NAME "$name" --epochs 2000 --beta 1 --mode test --transform_type normal --Dataset_name for_best_resample --loss_pt_on_off off  --ave_data_flg $ave_data_flg --train_batch_size "$train_batch_size" --learning_rate "$learning_rate"
         done
         python3 output_data_pqrst_v3.py --dataset_date $dataset_date --names $measure_names --measure_dates $measure_dates ----subject_group "$subject_group" --dataset_ver "$dataset"--augumentation "$augumentation" --train_batch_size "$train_batch_size" --learning_rate "$learning_rate"
     done

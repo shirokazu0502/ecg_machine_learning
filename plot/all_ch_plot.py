@@ -17,13 +17,13 @@ peak_method = "cwt"
 dataset_made_date = DATASET_MADE_DATE
 # dataset_input_path = (
 #     PROCESSED_DATA_DIR
-#     + "/pqrst_nkmodule_since{}_{}/{}_{}_0.8s/0/".format(
-#         dataset_made_date, peak_method, name, date
+#     + "/15ch4_best_resample/{}_{}_0.8s/0/ch_16_base/moving_ave_datasets".format(
+#         name, date
 #     )
 # )
 dataset_input_path = (
     PROCESSED_DATA_DIR
-    + "/16chデータセット避難用/{}_{}_0.8s/0/moving_ave_datasets".format(name, date)
+    + "/15ch_arrange_direction/{}_{}_0.8s/0/moving_ave_datasets".format(name, date)
 )
 # dataset_input_path = PROCESSED_DATA_DIR + "/synchro_data/patient5"
 # dataset_input_path = RAW_DATA_DIR + "/takahashi_test/{}/{}_{}_0/0".format(

@@ -46,10 +46,10 @@ HPF_FS = 1.0
 # DATASET_MADE_DATE="0120" #packet_loss_data_{}の部分
 # DATASET_MADE_DATE="icce0116" #packet_loss_data_{}の部分
 # RATE_12ch=1000
-RATE_12ch = 1000
+RATE_12ch = 500
 # RATE_16CH=122.06
 # RATE=1000
-RATE = 1000
+RATE = 500
 # TIME=24  #記録時間は24秒または10秒
 
 
@@ -603,24 +603,23 @@ class ArrayComparator:
             if mse < min_mse:
                 min_mse = mse
                 best_index = i
-                # 最終ピークのスタートとの時間差分を記録
-                final_diff = abs(
-                    (time1[target + small_size - 1] - time1[target])
-                    - (time2[best_index + small_size - 1] - time2[best_index])
-                )
-                print(time1, time2, best_index, target, small_size)
-                print(
-                    final_diff,
-                    time1[target + small_size - 1],
-                    time2[best_index + small_size - 1],
-                )
+                # # 最終ピークのスタートとの時間差分を記録
+                # final_diff = abs(
+                #     (time1[target + small_size - 1] - time1[target])
+                #     - (time2[best_index + small_size - 1] - time2[best_index])
+                # )
+                # print(time1, time2, best_index, target, small_size)
+                # print(
+                #     final_diff,
+                #     time1[target + small_size - 1],
+                #     time2[best_index + small_size - 1],
+                # )
                 # time.sleep(100)
         print("12chの最初のピークのtime={}".format(time1[target]))
         print("16chの対応するピークのtime={}".format(time2[best_index]))
         cut_time = time2[best_index] - time1[target]
         print("差分={}".format(cut_time))
-        print(final_diff, time1, time2)
-        return cut_time, final_diff
+        return cut_time, min_mse
 
     # def find_best_cut_time(self):
     #     cut_min_max_range = self.cut_min_max_range
@@ -663,7 +662,7 @@ class ArrayComparator:
     #     return corr_max_time
 
     def peak_diff_plot_move(self, cut_time):
-        cut_time, final_diff = self.find_best_cut_time()
+        cut_time, min_mse = self.find_best_cut_time()
         time1, time2, diff1, diff2 = self.cul_diff()
         time1_v2 = time1 + cut_time
         print("cut_time", cut_time)
@@ -1489,7 +1488,14 @@ class AutoIntegerFileHandler:
         return integer
 
     def write_integer(
-        self, RATE, cut_time, target_16ch, reverse, target_12ch, cut_min_max_range
+        self,
+        RATE,
+        best_rate,
+        cut_time,
+        target_16ch,
+        reverse,
+        target_12ch,
+        cut_min_max_range,
     ):
         integer = self.input_integer(RATE, cut_time)
         # with open(self.filename, 'w') as file:
@@ -1502,7 +1508,7 @@ class AutoIntegerFileHandler:
 
         data = {
             "INDEX": str(integer),
-            "sampling_rate": str(RATE_16CH),
+            "sampling_rate": str(best_rate),
             "TARGET_CH_16ch": str(target_16ch),
             "TARGET_CH_15ch": "ch_1",  # TARGET_15chの波形を切り出すときに使う。
             "REVERSE": reverse,  # ピーク検出するときにTARGET_16chの波形を反転させるかどうかを決める。
@@ -3258,7 +3264,7 @@ def main(args):
         peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
         print("reverse=={}".format(reverse))
         # peak_sc_plot(df_16ch_pf.copy(),RATE=RATE_16CH,TARGET=TARGET_CHANNEL_16ch)
-        min_final_diff = float("inf")
+        min_mse = float("inf")
 
         rate_candidates = np.arange(
             121.2, 122.6, 0.01
@@ -3292,10 +3298,9 @@ def main(args):
             comparator = ArrayComparator(
                 sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
             )
-            cut_time, final_diff = comparator.find_best_cut_time()
-            print(final_diff, rate_candidate)
-            if final_diff < min_final_diff:
-                min_final_diff = final_diff
+            cut_time, mse = comparator.find_best_cut_time()
+            if mse < min_mse:
+                min_mse = mse
                 best_rate = rate_candidate
                 best_cut_time = cut_time
                 best_df_resample_16ch = df_resample_16ch.copy()
@@ -3313,6 +3318,7 @@ def main(args):
         if input("write_to_CSV OK? y or n") == "y":
             handler.write_integer(
                 RATE=RATE,
+                best_rate=best_rate,
                 cut_time=best_cut_time,
                 target_16ch=TARGET_CHANNEL_16ch,
                 reverse=reverse,
@@ -3501,7 +3507,7 @@ if __name__ == "__main__":
     )
     args.TARGET_CHANNEL_12CH = "A2"
     args.cut_min_max_range = [0.0, 10000.0]
-    args.reverse = "off"
+    args.reverse = "on"
     args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.project_path='/home/cs28/share/goto/goto/ecg_project'
@@ -3513,7 +3519,7 @@ if __name__ == "__main__":
     # args.dataset_output_path = PROCESSED_DATA_DIR + "/pqrst_nkmodule_since{}_{}".format(
     #     args.dataset_made_date, args.peak_method
     # )
-    args.dataset_output_path = PROCESSED_DATA_DIR + "/resample_1000"
+    args.dataset_output_path = PROCESSED_DATA_DIR + "/for_best_resample"
     args.test_images_path = TEST_DIR + "/raw_datas_test"
     main(args)
     # dataset_images_path=''

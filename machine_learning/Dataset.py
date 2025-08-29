@@ -846,7 +846,7 @@ def make_p_onset_extension_datas(
     PGV_datas, ECG_datas, pt_array, label_name, extation_rate
 ):
     p_offset_org = pt_array[2]
-    r_onset = 170
+    r_onset = 130
     # print(ECG_datas)
     extation_range_ECG = ECG_datas[:, p_offset_org:r_onset]
     extation_range_PGV = PGV_datas[:, p_offset_org:r_onset]
@@ -1655,8 +1655,8 @@ def Dataset_setup_8ch_pt_augmentation(
     dataset_num,
     DataAugumentation,
     ave_data_flg,
+    datalength=400,
 ):
-    datalength = 400
     ecg_ch_num = 8
     Data = []
     PGV_train_set = []
@@ -1708,8 +1708,9 @@ def Dataset_setup_8ch_pt_augmentation(
         ave_path = ""
     print(ave_path)
     print("fafafafafafa")
+    base_channels = [""]
     # base_channels = ["ch_1_base", "ch_4_base", "ch_13_base", "ch_16_base"]
-    base_channels = ["ch_1_base", "ch_4_base", "ch_13_base", "ch_16_base"]
+
     for j in range(len(Train_list)):
         for base_ch in base_channels:
             path_to_dataset = directory_path + "/" + Train_list[j] + "/" + base_ch + "/"
@@ -1917,7 +1918,7 @@ def Dataset_setup_8ch_pt_augmentation(
                         or DataAugumentation == "pr_and_height"
                     ):  # P_offsetからR_onsetを延長するデータ拡張
                         # r_offset=230#
-                        r_onset = 170
+                        r_onset = 130
                         p_onset = pt_array[0]
                         p_offset = pt_array[2]
                         extend_p_offset_rates = [
@@ -1974,8 +1975,8 @@ def Dataset_setup_8ch_pt_augmentation(
                     if (
                         DataAugumentation == "rt"
                         or DataAugumentation == "rt_and_height"
-                    ):  # P_onsetからR_onsetを延長するデータ拡張
-                        r_offset = 230  #
+                    ):  # R_offsetからT_onsetを延長するデータ拡張
+                        r_offset = 170  #
                         t_offset = pt_array[1]
                         t_onset = pt_array[3]
                         extend_t_offset_rates = [

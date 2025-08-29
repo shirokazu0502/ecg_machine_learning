@@ -51,20 +51,23 @@ def plot_rri(rr_times, rr_intervals):
     plt.close()
 
 
-process_flg = 2
+process_flg = 0
 if process_flg == 0:
-    patient_datas_dir = RAW_DATA_DIR + "/takahashi_test/patient1"
+    patient_datas_dir = RAW_DATA_DIR + "/takahashi_test/patient10"
     # df = pd.read_csv(patient_datas_dir+"/db20240513_180746.csv",header=None)
-    df = pd.read_csv(patient_datas_dir + "/dbraw_20240513_180746.csv", header=None)
+    df = pd.read_csv(
+        patient_datas_dir + "/db20241106_182530_overnight.csv", header=None
+    )
     # あるデータフレームの範囲を抽出する
     # # 5000刻みで3つfor文で作成する
     # for i in range(3):
     #     extract_df = df[5000*i:5000*(i+1)]
     #     extract_df.to_csv(RAW_DATA_DIR+'/extract_patient_data/db_patient_16ch_data{}_{}_{}.csv'.format(i+1, 5000*i, 5000*(i+1)), header=False, index=False)
     #     print("データを抽出しました。")
-    extract_df = df[0:100000]
+    extract_df = df[255300:265300]
     extract_df.to_csv(
-        RAW_DATA_DIR + "/takahashi_test/patient1/db_patient1_16ch_data_0s_820s.csv",
+        RAW_DATA_DIR
+        + "/takahashi_test/patient10/db_patient10_16ch_data_2091s_2173s.csv",
         header=False,
         index=False,
     )

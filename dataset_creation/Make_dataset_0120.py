@@ -549,11 +549,23 @@ class ArrayComparator:
             if mse < min_mse:
                 min_mse = mse
                 best_index = i
+                # # 最終ピークのスタートとの時間差分を記録
+                # final_diff = abs(
+                #     (time1[target + small_size - 1] - time1[target])
+                #     - (time2[best_index + small_size - 1] - time2[best_index])
+                # )
+                # print(time1, time2, best_index, target, small_size)
+                # print(
+                #     final_diff,
+                #     time1[target + small_size - 1],
+                #     time2[best_index + small_size - 1],
+                # )
+                # time.sleep(100)
         print("12chの最初のピークのtime={}".format(time1[target]))
         print("15chの対応するピークのtime={}".format(time2[best_index]))
         cut_time = time2[best_index] - time1[target]
         print("差分={}".format(cut_time))
-        return cut_time
+        return cut_time, min_mse
 
     # def find_best_cut_time(self):
     #     cut_min_max_range = self.cut_min_max_range
@@ -596,7 +608,7 @@ class ArrayComparator:
     #     return corr_max_time
 
     def peak_diff_plot_move(self, cut_time):
-        cut_time = self.find_best_cut_time()
+        cut_time, min_mse = self.find_best_cut_time()
         time1, time2, diff1, diff2 = self.cul_diff()
         time1_v2 = time1 + cut_time
         print("cut_time", cut_time)
@@ -1422,7 +1434,14 @@ class AutoIntegerFileHandler:
         return integer
 
     def write_integer(
-        self, RATE, cut_time, target_15ch, reverse, target_12ch, cut_min_max_range
+        self,
+        RATE,
+        best_rate,
+        cut_time,
+        target_15ch,
+        reverse,
+        target_12ch,
+        cut_min_max_range,
     ):
         integer = self.input_integer(RATE, cut_time)
         # with open(self.filename, 'w') as file:
@@ -1435,7 +1454,7 @@ class AutoIntegerFileHandler:
 
         data = {
             "INDEX": str(integer),
-            "sampling_rate": str(RATE_15CH),
+            "sampling_rate": str(best_rate),
             "TARGET_CH_16ch": "ch_1",
             "TARGET_CH_15ch": str(target_15ch),
             "REVERSE": reverse,  # ピーク検出するときにTARGET_15chの波形を反転させるかどうかを決める。
@@ -1491,6 +1510,7 @@ class AutoIntegerFileHandler:
             # input("posseeeeeeee")
             return (
                 int(data_dict["INDEX"]),
+                data_dict["sampling_rate"],
                 data_dict["TARGET_CH_15ch"],
                 data_dict["REVERSE"],
                 data_dict["TARGET_CH_12ch"],
@@ -3226,23 +3246,23 @@ def ecg_clean_df_15ch(df_15ch, rate):
         ecg_signal = df_15ch[column].copy().values
         ecg_signal = nk.ecg_clean(ecg_signal, sampling_rate=rate, method="neurokit")
         df_15ch_cleaned[column] = ecg_signal
-    fig = plt.figure(num=None, figsize=(12, 5), dpi=100, facecolor="w", edgecolor="k")
-    axis_line_width = 2.0
-    tick_label_size = 18
-    # 最初のグラフ（8プロット）
-    plot_time = np.arange(len(df_15ch)) / RATE_15CH
-    ax1 = fig.add_subplot(1, 1, 1)
-    ax1.plot(plot_time, df_15ch[target_ch], label=target_ch)
-    ax1.plot(plot_time, df_15ch_cleaned[target_ch], label=f"filtered {target_ch}")
-    # ax1.legend(fontsize=12, ncol=1)
-    ax1.legend(loc="upper right", fontsize=18, ncol=1, bbox_to_anchor=(1, 1))
-    ax1.tick_params(labelsize=tick_label_size, direction="in")
-    plt.xlim(3.8, 8)
-    plt.ylim(-100, 200)
-    for axis in ["top", "bottom", "left", "right"]:
-        ax1.spines[axis].set_linewidth(axis_line_width)
-    plt.tight_layout()
-    # plt.show()
+    # fig = plt.figure(num=None, figsize=(12, 5), dpi=100, facecolor="w", edgecolor="k")
+    # axis_line_width = 2.0
+    # tick_label_size = 18
+    # # 最初のグラフ（8プロット）
+    # plot_time = np.arange(len(df_15ch)) / RATE_15CH
+    # ax1 = fig.add_subplot(1, 1, 1)
+    # ax1.plot(plot_time, df_15ch[target_ch], label=target_ch)
+    # ax1.plot(plot_time, df_15ch_cleaned[target_ch], label=f"filtered {target_ch}")
+    # # ax1.legend(fontsize=12, ncol=1)
+    # ax1.legend(loc="upper right", fontsize=18, ncol=1, bbox_to_anchor=(1, 1))
+    # ax1.tick_params(labelsize=tick_label_size, direction="in")
+    # plt.xlim(3.8, 8)
+    # plt.ylim(-100, 200)
+    # for axis in ["top", "bottom", "left", "right"]:
+    #     ax1.spines[axis].set_linewidth(axis_line_width)
+    # plt.tight_layout()
+    # # plt.show()
     return df_15ch_cleaned
 
 
@@ -3408,65 +3428,69 @@ def main(args):
             reverse = args.reverse
             TARGET_CHANNEL_15ch = "ch_1"
         if check_flg == False:  # 同期するためのファイルが存在していないとき。
-            print("TARGET_CHNNEL_16chは")
-            # TARGET_CHANNEL_16ch = validate_integer_input()
-            # if base_ch == "ch_1":
-            #     if args.reverse == "on":
-            #         reverse = "off"
-            #     else:
-            #         reverse = "on"
-            #     TARGET_CHANNEL_15ch = "ch_16"
-            # else:
-            #     reverse = args.reverse
-            #     TARGET_CHANNEL_15ch = "ch_1"
-            # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=2.0,HPF_fs=1.0,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
-            # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=HPF_FP,HPF_fs=HPF_FS,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
-            df_15ch_pf = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=RATE_15CH)
-            df_resample_15ch = linear_interpolation_resample_All(
-                df=df_15ch_pf.copy(), sampling_rate=RATE_15CH, new_sampling_rate=RATE
-            )
-            df_15ch_pf = df_resample_15ch.copy()
-            if reverse == "off":
-                sc_15ch = peak_sc_15ch(
-                    df_15ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
-                )
-                peak_sc_plot(df_15ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch)
-            else:
-                df_15ch_reverse = df_15ch_pf.copy()
-                df_15ch_reverse[TARGET_CHANNEL_15ch] = (-1) * df_15ch_pf.copy()[
-                    TARGET_CHANNEL_15ch
-                ]
-                # reverseを採用
-                df_resample_15ch = df_15ch_reverse.copy()
-                sc_15ch = peak_sc_15ch(
-                    df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
-                )
-                peak_sc_plot(
-                    df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
-                )
-
             print("reverse=={}".format(reverse))
             # peak_sc_plot(df_15ch_pf.copy(),RATE=RATE_15CH,TARGET=TARGET_CHANNEL_15ch)
-            print(sc_15ch)
+            min_mse = float("inf")
 
-            comparator = ArrayComparator(
-                sc_15ch=sc_15ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
-            )
-            comparator.peak_diff_plot()
-            cut_time = comparator.find_best_cut_time()
-            comparator.peak_diff_plot_move(cut_time)
-            # comparator.find_best_cut_time()
+            rate_candidates = np.arange(
+                121.2, 122.6, 0.01
+            )  # 例: 121.5Hz～122.7Hzを0.1Hz刻み
+            for rate_candidate in rate_candidates:
+                df_resample_15ch = ecg_clean_df_15ch(
+                    df_15ch=df_15ch.copy(), rate=rate_candidate
+                )
+                df_resample_15ch = linear_interpolation_resample_All(
+                    df=df_resample_15ch.copy(),
+                    sampling_rate=rate_candidate,
+                    new_sampling_rate=RATE,
+                )
+                if reverse == "off":
+                    sc_15ch = peak_sc_15ch(
+                        df_resample_15ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
+                    )
+                    # peak_sc_plot(df_15ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch)
+                else:
+                    df_15ch_reverse = df_resample_15ch.copy()
+                    df_15ch_reverse[TARGET_CHANNEL_15ch] = (
+                        -1
+                    ) * df_resample_15ch.copy()[TARGET_CHANNEL_15ch]
+                    # reverseを採用
+                    df_resample_15ch = df_15ch_reverse.copy()
+                    sc_15ch = peak_sc_15ch(
+                        df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
+                    )
+                    # peak_sc_plot(
+                    #     df_15ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch
+                    # )
+
+                comparator = ArrayComparator(
+                    sc_15ch=sc_15ch,
+                    sc_12ch=sc_12ch,
+                    cut_min_max_range=cut_min_max_range,
+                )
+                cut_time, mse = comparator.find_best_cut_time()
+                if mse < min_mse:
+                    min_mse = mse
+                    best_rate = rate_candidate
+                    best_cut_time = cut_time
+                    best_df_resample_15ch = df_resample_15ch.copy()
+
+            df_resample_15ch = best_df_resample_15ch.copy()
+            print(best_cut_time, best_rate)
+            peak_sc_plot(df_resample_15ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_15ch)
+            comparator.peak_diff_plot_move(best_cut_time)
             # peak_diff_plot(sc_12ch,sc_15ch)
-            Plot_15ch_pf = MultiPlotter(df_15ch_pf, RATE=RATE)
+            Plot_15ch_pf = MultiPlotter(df_resample_15ch, RATE=RATE)
             Plot_15ch_pf.multi_plot(xmin=0, xmax=100, ylim=0)
             Plot_15ch_pf.multi_plot_15ch_with_sc(xmin=0, xmax=20, ylim=0, sc=sc_15ch)
             plt.show()
             plt.close()
-            print(int(cut_time * RATE))
+            print(int(best_cut_time * RATE))
             if input("write_to_CSV OK? y or n") == "y":
                 handler.write_integer(
                     RATE=RATE,
-                    cut_time=cut_time,
+                    best_rate=best_rate,
+                    cut_time=best_cut_time,
                     target_15ch=TARGET_CHANNEL_15ch,
                     reverse=reverse,
                     target_12ch=TARGET_CHANNEL_12CH,
@@ -3475,6 +3499,9 @@ def main(args):
 
             else:
                 return 0
+            syn_index, best_rate, TARGET_CHANNEL_15ch, reverse, TARGET_CHANNEL_12CH = (
+                handler.read_integer()
+            )
 
         else:  # 同期するファイルが存在しているとき。
             # df_15ch_pf = hpf_lpf(df_15ch.copy(),HPF_fp=HPF_FP,HPF_fs=HPF_FS,LPF_fp=0,LPF_fs=0,RATE=RATE_15CH)
@@ -3482,59 +3509,20 @@ def main(args):
             # df_15ch_pf = df_15ch.copy()
             print("ファイルが存在します。")
             print("fafafafa")
-            df_15ch_pf = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=RATE_15CH)
+            syn_index, best_rate, TARGET_CHANNEL_15ch, reverse, TARGET_CHANNEL_12CH = (
+                handler.read_integer()
+            )  # 同期するインデックス
+            best_rate = float(best_rate)
+            df_resample_15ch = ecg_clean_df_15ch(df_15ch=df_15ch.copy(), rate=best_rate)
             print("aaaaaaaaaaS")
             df_resample_15ch = linear_interpolation_resample_All(
-                df=df_15ch_pf.copy(), sampling_rate=RATE_15CH, new_sampling_rate=RATE
+                df=df_resample_15ch.copy(),
+                sampling_rate=best_rate,
+                new_sampling_rate=RATE,
             )
 
-        syn_index, TARGET_CHANNEL_15ch, reverse, TARGET_CHANNEL_12CH = (
-            handler.read_integer()
-        )  # 同期するインデックス
         if base_ch == "ch_16":
             TARGET_CHANNEL_15ch = "ch_1"
-        print(syn_index)
-        # if(target_ch!=TARGET_CHANNEL_15ch):
-        #     print("target_ch!=args.TARGE_CHSNNEL_15ch")
-        #     print("target_ch"+target_ch)
-        #     return 0
-        # input("15ch_pf")
-
-        # if DEBUG_PLOT == True:
-        #     if reverse == "off":
-        #         sc_15ch_pf = peak_sc_15ch(
-        #             df_resample_15ch[syn_index:].copy(),
-        #             RATE=RATE_15CH,
-        #             TARGET=TARGET_CHANNEL_15ch,
-        #         )
-
-        #     sc_12ch = peak_sc(
-        #         df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH
-        #     )
-
-        #     Plot_15ch_pf = MultiPlotter(df_resample_15ch.copy(), RATE=RATE)
-        #     # Plot_15ch_pf.multi_plot(xmin=0,xmax=10,ylim=0)
-        #     # Plot_15ch_pf.plot_all_channels(xmin=0,xmax=8,ylim=0)
-
-        #     Plot_12ch = MultiPlotter_both(
-        #         df12=df_12ch_cleaned,
-        #         df15=df_resample_15ch[syn_index:].copy(),
-        #         RATE12=RATE_12ch,
-        #         RATE15=RATE,
-        #     )  # cleanされた12chにする。
-        #     Plot_12ch.multi_plot_12ch_15ch_with_sc_2(
-        #         xmin=0,
-        #         xmax=5,
-        #         ylim=0,
-        #         sc=sc_12ch,
-        #         ch=TARGET_CHANNEL_15ch,
-        #         png_path=args.png_path + "12chsc",
-        #     )
-        #     plt.show()
-        #     plt.close()
-        #     # input()
-
-        # print(df_12ch)
         print(syn_index)
         print(df_resample_15ch)
 
@@ -3698,9 +3686,7 @@ if __name__ == "__main__":
     # args.processed_datas_os=PROCESSED_DATA_DIR
     args.dataset_made_date = DATASET_MADE_DATE
     args.raw_datas_dir = RAW_DATA_DIR + "/takahashi_test/{}".format(args.dir_name)
-    args.dataset_output_path = PROCESSED_DATA_DIR + "/pqrst_nkmodule_since{}_{}".format(
-        args.dataset_made_date, args.peak_method
-    )
+    args.dataset_output_path = PROCESSED_DATA_DIR + "/15ch4_best_resample"
     args.test_images_path = TEST_DIR + "/raw_datas_test"
     main(args)
     # dataset_images_path=''

@@ -33,7 +33,7 @@ matplotlib.use("TkAgg")
 import random
 import pandas as pd
 
-from models_Unet import UNet1D
+from models_Unet import Unet
 
 # =================
 import Dataset
@@ -1388,7 +1388,7 @@ def main(args):
     # summary(unet, input_size=(1,16 , 384))
     in_channels = 16
     out_channels = 8
-    base_filters = 64
+    droprate = 0.05
     # common_kwargs = {
     #     "datalength": datalength,
     #     "enc_convlayer_sizes": args.enc_convlayer_sizes,
@@ -1399,13 +1399,14 @@ def main(args):
     common_kwargs = {
         "in_channels": in_channels,
         "out_channels": out_channels,
+        "droprate": droprate,
     }
     # unet_dict = {
-    #     "P": UNet1D(**common_kwargs).to(device),
-    #     "R": UNet1D(**common_kwargs).to(device),
-    #     "T": UNet1D(**common_kwargs).to(device),
+    #     "P": Unet(**common_kwargs).to(device),
+    #     "R": Unet(**common_kwargs).to(device),
+    #     "T": Unet(**common_kwargs).to(device),
     # }
-    unet = UNet1D(**common_kwargs).to(device)
+    unet = Unet(**common_kwargs).to(device)
     if args.mode == "train":
         print("TRAINING MODE::\n")
 
@@ -1711,7 +1712,7 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    current_time = "0724_1430_ch16_unet_not_patient"
+    current_time = "0730_1430_ch16_unet_not_nakanishi"
 
     datalength = int(RATE * 0.8)  # 0.8秒間のデータを使用
     parser = argparse.ArgumentParser()
