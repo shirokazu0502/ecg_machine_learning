@@ -16,42 +16,44 @@ sys.path.append(base_dir)
 # We define a window around it to calculate the integral.
 QRS_WINDOW_START = 100
 QRS_WINDOW_END = 200
+# The R-peak is known to be at index 150.
+R_PEAK_INDEX = 150
 
-def calculate_cardiac_axis(df, col_d, col_m, col_p):
-    """
-    Calculates the cardiac axis angle from the signals of three orthogonal points.
-
-    Args:
-        df (pd.DataFrame): The dataframe for a single heartbeat.
-        col_d (str): The column name for the Lower Left position.
-        col_m (str): The column name for the Upper Right position.
-        col_p (str): The column name for the Lower Right position.
-
-    Returns:
-        float: The calculated cardiac axis angle in degrees.
-    """
-    # Ensure columns exist
-    for col in [col_d, col_m, col_p]:
-        if col not in df.columns:
-            raise ValueError(f"Column '{col}' not found in the dataframe.")
-
-    # Define orthogonal vectors based on the square geometry
-    # Vertical Component (Y-axis): M (Upper Right) -> P (Lower Right)
-    signal_v = df[col_p] - df[col_m]
-    
-    # Horizontal Component (X-axis): P (Lower Right) -> D (Lower Left)
-    signal_h = df[col_d] - df[col_p]
-
-    # Integrate over the QRS window
+def calculate_axis_integral(signal_h, signal_v):
+    """Calculates cardiac axis based on signal area (integral)."""
     qrs_integral_v = np.sum(signal_v[QRS_WINDOW_START:QRS_WINDOW_END])
     qrs_integral_h = np.sum(signal_h[QRS_WINDOW_START:QRS_WINDOW_END])
-
-    # Calculate the angle using arctan2(y, x)
-    # The result is in radians. We convert it to degrees.
     angle_rad = np.arctan2(qrs_integral_v, qrs_integral_h)
-    angle_deg = np.degrees(angle_rad)
+    return np.degrees(angle_rad)
 
-    return angle_deg
+def get_net_amplitude(signal_segment):
+    """Finds Q, R, S amplitudes and calculates net amplitude."""
+    # R is the max value in the segment
+    r_amp = np.max(signal_segment)
+    r_index = np.argmax(signal_segment)
+
+    # Q is the min value before the R peak
+    q_segment = signal_segment[:r_index]
+    q_amp = np.min(q_segment) if len(q_segment) > 0 else 0
+
+    # S is the min value after the R peak
+    s_segment = signal_segment[r_index+1:]
+    s_amp = np.min(s_segment) if len(s_segment) > 0 else 0
+    
+    # Net amplitude calculation
+    net_amplitude = r_amp - abs(q_amp) - abs(s_amp)
+    return net_amplitude
+
+def calculate_axis_amplitude(signal_h, signal_v):
+    """Calculates cardiac axis based on QRS amplitude."""
+    qrs_segment_h = signal_h[QRS_WINDOW_START:QRS_WINDOW_END].to_numpy()
+    qrs_segment_v = signal_v[QRS_WINDOW_START:QRS_WINDOW_END].to_numpy()
+
+    net_amp_h = get_net_amplitude(qrs_segment_h)
+    net_amp_v = get_net_amplitude(qrs_segment_v)
+
+    angle_rad = np.arctan2(net_amp_v, net_amp_h)
+    return np.degrees(angle_rad)
 
 def process_subject(subject_dir, col_d, col_m, col_p):
     """
@@ -79,11 +81,22 @@ def process_subject(subject_dir, col_d, col_m, col_p):
         try:
             df = pd.read_csv(file_path)
             
-            # Calculate cardiac axis
-            cardiac_axis = calculate_cardiac_axis(df, col_d, col_m, col_p)
+            # Ensure columns exist
+            for col in [col_d, col_m, col_p]:
+                if col not in df.columns:
+                    raise ValueError(f"Column '{col}' not found in the dataframe.")
+
+            # Define orthogonal vectors
+            signal_v = df[col_p] - df[col_m]
+            signal_h = df[col_d] - df[col_p]
+
+            # Calculate axis using both methods
+            axis_integral = calculate_axis_integral(signal_h, signal_v)
+            axis_amplitude = calculate_axis_amplitude(signal_h, signal_v)
             
-            # Add the new column
-            df['cardiac_axis'] = cardiac_axis
+            # Add new columns
+            df['cardiac_axis_integral'] = axis_integral
+            df['cardiac_axis_amplitude'] = axis_amplitude
             
             # Save to new location
             output_filename = os.path.basename(file_path)
