@@ -106,11 +106,8 @@ def main():
     
     args = parser.parse_args()
     
-    # Correct base_dir to be project root
-    project_root = os.path.dirname(base_dir)
-    subject_full_path = os.path.join(project_root, args.subject_dir)
-
-    process_subject(subject_full_path, args.col_d, args.col_m, args.col_p)
+    # The script is run from the project root, so the relative path is correct.
+    process_subject(args.subject_dir, args.col_d, args.col_m, args.col_p)
 
 if __name__ == "__main__":
     main()
