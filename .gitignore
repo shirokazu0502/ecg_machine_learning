@@ -1,2 +1,76 @@
-machine_learning/for_16ch_data_program/model_pth
-machine_learning/for_16ch_data_program/model_pth/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*cpython-*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Data and results
+*.csv
+*.pth
+*.mp4
+*.png
+*.svg
+*.ipynb
+*.txt
+*.xlsx
+*.pptx
+*.pdf
+*.docx
+*.zip
+*.lnk
+*.exe
+*.dll
+*.ico
+*.bat
+
+# Logs and outputs
+/runs/
+/outputs/
+/machine_learning/runs/
+/machine_learning/Outputs/
+/machine_learning/model_pth/
+/machine_learning/figs_newref/
+/only_estimate/outputs/
+/only_estimate/data/
+/dataset_creation/Dataset/
+/mapping_15ch/*.mp4
+/mapping_15ch/*.png
+/plot/*.png
+/plot/*.svg
+/plot/*.csv
+/plot/*.ipynb
+
+# Old code directories
+/machine_learning/for_16ch_data_program/
+/machine_learning/no_peak_search/
+/machine_learning/過去プログラム/
+/only_estimate/
+
+# Backup
+/src_backup/
