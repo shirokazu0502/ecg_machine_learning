@@ -1,0 +1,66 @@
+{
+    "p_augumentation": "",
+    "r_augumentation": "",
+    "t_augumentation": "",
+    "Dataset_name": "15ch_arrange_direction",
+    "loss_pt_on_off": "off",
+    "loss_pt_on_off_R_weight": "",
+    "loss_pt_on_off_P_weight": "",
+    "loss_pt_on_off_T_weight": "",
+    "dataset_num": 100,
+    "TARGET_NAME": "asano",
+    "seed": 0,
+    "epochs": 2,
+    "train_batch_size": 16,
+    "test_batch_size": 1,
+    "val_batch_size": 1,
+    "learning_rate": 0.0005,
+    "datalength": 400,
+    "enc_convlayer_sizes": [
+        [
+            15,
+            1
+        ],
+        [
+            30,
+            2
+        ]
+    ],
+    "enc_fclayer_sizes": [
+        6000,
+        500,
+        64
+    ],
+    "dec_fclayer_sizes": [
+        64,
+        512,
+        3200
+    ],
+    "dec_convlayer_sizes": [
+        [
+            16,
+            2
+        ],
+        [
+            8,
+            1
+        ]
+    ],
+    "latent_size": 2,
+    "print_every": 2000,
+    "fig_root": "/mnt/ecg_project/outputs/figs_newref/0929_ch15_unet_batch16",
+    "mae_folder": "/mnt/ecg_project/outputs/mae//0929_ch15_unet_batch16",
+    "conditional": false,
+    "train_off": true,
+    "pth": "vae_prt_sep.pth",
+    "mode": "train",
+    "loss_fn_type": "mse",
+    "beta": 1,
+    "alpha": 1000,
+    "transform_type": "normal",
+    "current_time": "0929_ch15_unet_batch16",
+    "ecg_ch_num": 8,
+    "num_channels": 15,
+    "ave_data_flg": 1,
+    "base_filters": 128
+}

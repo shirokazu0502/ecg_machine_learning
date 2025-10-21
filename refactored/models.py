@@ -1,5 +1,8 @@
+import torch
+import torch.nn as nn
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def idx2onehot(idx, n):
     idx = idx.to(device)
@@ -24,7 +27,7 @@ class VAE(nn.Module):
         latent_size,
         conditional=False,
         num_labels=0,
-        num_channels=15, # New argument
+        num_channels=15,  # New argument
     ):
         super().__init__()
 
@@ -47,7 +50,7 @@ class VAE(nn.Module):
             latent_size,
             conditional,
             num_labels,
-            num_channels, # Pass to Encoder
+            num_channels,  # Pass to Encoder
         ).to(device)
         self.decoder = Decoder(
             datalength,
@@ -88,14 +91,14 @@ class Encoder(nn.Module):
         latent_size,
         conditional,
         num_labels,
-        num_channels, # New argument
+        num_channels,  # New argument
     ):
         super().__init__()
 
         self.datalength = datalength
         self.conv_layer_sizes = conv_layer_sizes
         self.conditional = conditional
-        self.num_channels = num_channels # Store num_channels
+        self.num_channels = num_channels  # Store num_channels
 
         self.MLP_1 = nn.Sequential().to(device)
         self.MLP_2 = nn.Sequential().to(device)
@@ -134,7 +137,9 @@ class Encoder(nn.Module):
 
     def forward(self, x, c=None):
         if len(self.conv_layer_sizes) != 0:
-            x = torch.reshape(x, (-1, self.num_channels, self.datalength)) # Use self.num_channels
+            x = torch.reshape(
+                x, (-1, self.num_channels, self.datalength)
+            )  # Use self.num_channels
 
         if self.conditional:
             c = idx2onehot(c, n=10)
@@ -244,13 +249,16 @@ class DoubleConv1d(nn.Module):
 
 import torch.nn.functional as F
 
+
 class UNet1D(nn.Module):
-    def __init__(self, num_channels=15, out_channels=8, base_filters=32): # Changed in_channels to num_channels
+    def __init__(
+        self, num_channels=15, out_channels=8, base_filters=32
+    ):  # Changed in_channels to num_channels
         super(UNet1D, self).__init__()
-        self.in_channels = num_channels # Use num_channels
+        self.in_channels = num_channels  # Use num_channels
         self.out_channels = out_channels
 
-        self.e1 = DoubleConv1d(self.in_channels, base_filters) # Use self.in_channels
+        self.e1 = DoubleConv1d(self.in_channels, base_filters)  # Use self.in_channels
         self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)
         self.e2 = DoubleConv1d(base_filters, base_filters * 2)
         self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)

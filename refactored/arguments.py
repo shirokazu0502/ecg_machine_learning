@@ -52,7 +52,12 @@ def get_args():
     parser.add_argument("--transform_type", type=str, default="normal")
     parser.add_argument("--current_time", type=str, default=current_time)
     parser.add_argument("--ecg_ch_num", type=int, default=8)
-    parser.add_argument("--num_channels", type=int, default=15, help="Number of input channels for the models (e.g., 15 or 16).")
+    parser.add_argument(
+        "--num_channels",
+        type=int,
+        default=15,
+        help="Number of input channels for the models (e.g., 15 or 16).",
+    )
     parser.add_argument("--ave_data_flg", type=int, default=0)
     parser.add_argument("--base_filters", type=int, default=128)
     args = parser.parse_args()

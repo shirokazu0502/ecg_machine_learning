@@ -445,11 +445,9 @@ def Dataset_setup_8ch_pt_augmentation(
     directory_path = os.path.join(PROCESSED_DATA_DIR, Dataset_name)
     dir_names = get_directory_names_all(directory_path)
     Train_list, Test_list = Train_Test_person_datas2(dir_names, target_name=TARGET_NAME)
-    
-    # Define columns to select instead of dropping
-    input_cols = [f'ch_{i}' for i in range(2, num_channels + 2)]
+
     # The 12-lead ECG columns to be dropped to get the input data
-    ecg_12_lead_cols = ['A1', 'A2', 'A3', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+    ecg_12_lead_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
 
     if ave_data_flg == 1:
         ave_path = "moving_ave_datasets"
@@ -469,8 +467,7 @@ def Dataset_setup_8ch_pt_augmentation(
                 )
 
                 if not os.path.isfile(path) or not os.path.isfile(pt_path):
-                    print("no file in " + Train_list[j])
-                    print(path)
+                    pass
                 else:
                     label_name = replace_slash_with_underscore(
                         Train_list[j]
@@ -479,11 +476,11 @@ def Dataset_setup_8ch_pt_augmentation(
                     data = pd.read_csv(path, header=0)
                     df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
                     pt_array = np.array(df_pt.iloc[0], dtype=int)
-                    
-                    # Select input and output columns by name
-                    data_mul = data[input_cols]
-                    data_ecg = data.drop(columns=input_cols + ['Time'])
 
+                    # Select input and output columns by index
+                    data_mul = data.iloc[:, 2:17]
+                    output_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
+                    data_ecg = data[output_cols]
                     PGV_train = torch.FloatTensor(data_mul.T.values)
                     PGV_train = PGV_train.reshape(-1, num_channels, datalength)
                     PGV_train = normalize_tensor_data(PGV_train)
@@ -507,7 +504,6 @@ def Dataset_setup_8ch_pt_augmentation(
                     path_to_dataset, "ponset_toffset_{}.csv".format(str(i).zfill(3))
                 )
                 if not os.path.isfile(path):
-                    print("no file in " + Test_list[j])
                     pass
                 else:
                     label_name = replace_slash_with_underscore(
@@ -517,9 +513,10 @@ def Dataset_setup_8ch_pt_augmentation(
                     df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
                     pt_array = np.array(df_pt.iloc[0], dtype=int)
 
-                    # Select input and output columns by name
-                    data_mul = data[input_cols]
-                    data_ecg = data.drop(columns=input_cols + ['Time'])
+                    # Select input and output columns by index
+                    data_mul = data.iloc[:, 2:17]
+                    output_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
+                    data_ecg = data[output_cols]
 
                     PGV_test = torch.FloatTensor(data_mul.T.values)
                     PGV_test = PGV_test.reshape(-1, num_channels, datalength)

@@ -1,4 +1,3 @@
-
 import os
 import sys
 import argparse
@@ -16,8 +15,6 @@ sys.path.append(base_dir)
 # We define a window around it to calculate the integral.
 QRS_WINDOW_START = 100
 QRS_WINDOW_END = 200
-# The R-peak is known to be at index 150.
-R_PEAK_INDEX = 150
 
 def calculate_axis_integral(signal_h, signal_v):
     """Calculates cardiac axis based on signal area (integral)."""
@@ -26,31 +23,29 @@ def calculate_axis_integral(signal_h, signal_v):
     angle_rad = np.arctan2(qrs_integral_v, qrs_integral_h)
     return np.degrees(angle_rad)
 
-def get_net_amplitude(signal_segment):
-    """Finds Q, R, S amplitudes and calculates net amplitude."""
-    # R is the max value in the segment
-    r_amp = np.max(signal_segment)
-    r_index = np.argmax(signal_segment)
-
-    # Q is the min value before the R peak
-    q_segment = signal_segment[:r_index]
-    q_amp = np.min(q_segment) if len(q_segment) > 0 else 0
-
-    # S is the min value after the R peak
-    s_segment = signal_segment[r_index+1:]
-    s_amp = np.min(s_segment) if len(s_segment) > 0 else 0
+def calculate_axis_amplitude_from_peaks(signal_h, signal_v, q_peak_idx, r_peak_idx, s_peak_idx):
+    """Calculates cardiac axis based on QRS amplitude using provided peak indices."""
     
-    # Net amplitude calculation
-    net_amplitude = r_amp - abs(q_amp) - abs(s_amp)
-    return net_amplitude
+    signal_len = len(signal_h)
+    if not all(0 <= idx < signal_len for idx in [q_peak_idx, r_peak_idx, s_peak_idx]):
+        raise IndexError(f"Peak index out of bounds. Indices: [Q:{q_peak_idx}, R:{r_peak_idx}, S:{s_peak_idx}], Signal length: {signal_len}")
 
-def calculate_axis_amplitude(signal_h, signal_v):
-    """Calculates cardiac axis based on QRS amplitude."""
-    qrs_segment_h = signal_h[QRS_WINDOW_START:QRS_WINDOW_END].to_numpy()
-    qrs_segment_v = signal_v[QRS_WINDOW_START:QRS_WINDOW_END].to_numpy()
+    # Convert to numpy for consistent indexing if they are pandas Series
+    signal_h_np = signal_h.to_numpy()
+    signal_v_np = signal_v.to_numpy()
 
-    net_amp_h = get_net_amplitude(qrs_segment_h)
-    net_amp_v = get_net_amplitude(qrs_segment_v)
+    # Extract amplitudes directly using indices, respecting their signs
+    q_amp_h = signal_h_np[q_peak_idx]
+    r_amp_h = signal_h_np[r_peak_idx]
+    s_amp_h = signal_h_np[s_peak_idx]
+    
+    q_amp_v = signal_v_np[q_peak_idx]
+    r_amp_v = signal_v_np[r_peak_idx]
+    s_amp_v = signal_v_np[s_peak_idx]
+
+    # Net amplitude is the algebraic sum of Q, R, and S amplitudes.
+    net_amp_h = q_amp_h + r_amp_h + s_amp_h
+    net_amp_v = q_amp_v + r_amp_v + s_amp_v
 
     angle_rad = np.arctan2(net_amp_v, net_amp_h)
     return np.degrees(angle_rad)
@@ -64,10 +59,11 @@ def process_subject(subject_dir, col_d, col_m, col_p):
         print(f"Error: 'moving_ave_datasets' directory not found in {subject_dir}")
         return
 
-    # Define output path
+    # Define paths
     subject_name = os.path.basename(subject_dir)
     output_dir = os.path.join(base_dir, "data", "processed", "cardiac_axis_dataset", subject_name, "0", "moving_ave_datasets")
     os.makedirs(output_dir, exist_ok=True)
+    ponset_dir = os.path.join(subject_dir, "0") # Path to ponset_toffset files
 
     # Find all dataset files
     files_to_process = sorted(glob.glob(os.path.join(source_data_path, "dataset_*.csv")))
@@ -79,25 +75,50 @@ def process_subject(subject_dir, col_d, col_m, col_p):
     
     for file_path in tqdm(files_to_process, desc=f"Processing {subject_name}"):
         try:
+            # --- Load beat signal data ---
             df = pd.read_csv(file_path)
             
-            # Ensure columns exist
-            for col in [col_d, col_m, col_p]:
-                if col not in df.columns:
-                    raise ValueError(f"Column '{col}' not found in the dataframe.")
-
-            # Define orthogonal vectors
-            signal_v = df[col_p] - df[col_m]
-            signal_h = df[col_d] - df[col_p]
-
-            # Calculate axis using both methods
-            axis_integral = calculate_axis_integral(signal_h, signal_v)
-            axis_amplitude = calculate_axis_amplitude(signal_h, signal_v)
+            # --- Load corresponding peak index data ---
+            file_id = os.path.basename(file_path).split('_')[-1].replace('.csv', '')
+            ponset_path = os.path.join(ponset_dir, f"ponset_toffset_{file_id}.csv")
             
-            # Add new columns
-            df['cardiac_axis_integral'] = axis_integral
-            df['cardiac_axis_amplitude'] = axis_amplitude
-            
+            if not os.path.exists(ponset_path):
+                print(f"Warning: ponset_toffset file not found for {os.path.basename(file_path)}. Cardiac axis (amplitude) will not be calculated.")
+                df['cardiac_axis_amplitude'] = np.nan # Add column with NaN
+            else:
+                peaks_df = pd.read_csv(ponset_path)
+                # Get indices from the first row of the peaks file
+                peak_indices = peaks_df.iloc[0]
+                q_peak_idx = int(peak_indices['q_peak'])
+                r_peak_idx = 150 # Hardcoded value as requested
+                s_peak_idx = int(peak_indices['s_peak'])
+
+                # Ensure columns exist
+                for col in [col_d, col_m, col_p]:
+                    if col not in df.columns:
+                        raise ValueError(f"Column '{col}' not found in the dataframe.")
+
+                # Define orthogonal vectors
+                signal_v = df[col_p] - df[col_m]
+                signal_h = df[col_d] - df[col_p]
+
+                # Calculate axis using the new amplitude method
+                axis_amplitude = calculate_axis_amplitude_from_peaks(signal_h, signal_v, q_peak_idx, r_peak_idx, s_peak_idx)
+                df['cardiac_axis_amplitude'] = axis_amplitude
+
+            # --- Calculate integral-based axis (unchanged) ---
+            # This part is kept as is, assuming it's still needed for comparison.
+            # Ensure columns exist for this calculation as well
+            required_cols_integral = [col_d, col_m, col_p]
+            if all(col in df.columns for col in required_cols_integral):
+                signal_v_integral = df[col_p] - df[col_m]
+                signal_h_integral = df[col_d] - df[col_p]
+                axis_integral = calculate_axis_integral(signal_h_integral, signal_v_integral)
+                df['cardiac_axis_integral'] = axis_integral
+            else:
+                df['cardiac_axis_integral'] = np.nan
+
+
             # Save to new location
             output_filename = os.path.basename(file_path)
             output_filepath = os.path.join(output_dir, output_filename)
@@ -119,7 +140,6 @@ def main():
     
     args = parser.parse_args()
     
-    # The script is run from the project root, so the relative path is correct.
     process_subject(args.subject_dir, args.col_d, args.col_m, args.col_p)
 
 if __name__ == "__main__":

@@ -71,7 +71,7 @@ def train_unet(
         )
 
 
-def test_unet(model, test_loader, device, args, ts):
+def test_unet(model, test_loader, device, args, exp_dir):
     model.eval()
     all_outputs = []
     all_targets = []
@@ -85,12 +85,8 @@ def test_unet(model, test_loader, device, args, ts):
     ecg_ch = args.ecg_ch_num
     if ecg_ch == 12:
         ecg_ch_names = [
-            "Ⅰ",
-            "Ⅱ",
-            "A3",
-            "aVR",
-            "aVL",
-            "aVF",
+            "A1",
+            "A2",
             "V1",
             "V2",
             "V3",
@@ -99,7 +95,7 @@ def test_unet(model, test_loader, device, args, ts):
             "V6",
         ]
     if ecg_ch == 8:
-        ecg_ch_names = ["Ⅰ", "Ⅱ", "V1", "V2", "V3", "V4", "V5", "V6"]
+        ecg_ch_names = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
     with torch.no_grad():
         for j, (x, xo, label_name, pt_index) in enumerate(test_loader):
             x, xo = x.to(device), xo.to(device)
@@ -170,12 +166,12 @@ def test_unet(model, test_loader, device, args, ts):
             batch_size_now = xo.shape[0]
 
             utils.plot_fig(
+                numplotfig=batch_size_now,
                 recon_x=recon_x,
                 xo=xo,
                 datalength=datalength,
-                ts=ts,
+                exp_dir=exp_dir,
                 args=args,
-                numplotfig=batch_size_now,
                 label_name=label_name,
                 ecg_ch_names=ecg_ch_names,
             )
@@ -183,7 +179,7 @@ def test_unet(model, test_loader, device, args, ts):
                 recon_x=recon_x,
                 xo=xo,
                 datalength=datalength,
-                ts=ts,
+                exp_dir=exp_dir,
                 args=args,
                 batch_size_num=batch_size_now,
                 label_name=label_name,
@@ -194,14 +190,14 @@ def test_unet(model, test_loader, device, args, ts):
             utils.save_csv2(
                 data=recon_x,
                 args=args,
-                ts=ts,
+                exp_dir=exp_dir,
                 label_name=label_name,
                 data_rec_or_xo="recon_x",
             )
             utils.save_csv2(
                 data=xo,
                 args=args,
-                ts=ts,
+                exp_dir=exp_dir,
                 label_name=label_name,
                 data_rec_or_xo="xo",
             )
@@ -254,9 +250,10 @@ def main():
         + args.loss_pt_on_off
     )
 
-    utils.create_directory_if_not_exists(os.path.join(args.fig_root, str(ts)))
+    exp_dir = os.path.join(args.fig_root, str(ts))
+    utils.create_directory_if_not_exists(exp_dir)
 
-    with open(os.path.join(args.fig_root, str(ts), "args.json"), mode="w") as f:
+    with open(os.path.join(exp_dir, "args.json"), mode="w") as f:
         json.dump(args.__dict__, f, indent=4)
 
     out_channels = 8
@@ -342,7 +339,7 @@ def main():
             test_val_all_rmse,
             test_val_12ch_all_rmse,
             pearson_scores,
-        ) = test_unet(unet, test_loader, device, args, ts)
+        ) = test_unet(unet, test_loader, device, args, exp_dir)
 
         test_val_all_mae = np.array(test_val_all_mae)
         test_val_mean_mae = np.mean(test_val_all_mae)
@@ -391,7 +388,7 @@ def main():
         utils.write_to_csv(output_file, data=data_to_write)
 
         print("--- METRICS ---")
-        with open(output_file, 'r') as f:
+        with open(output_file, "r") as f:
             print(f.read())
         print("--- END METRICS ---")
 

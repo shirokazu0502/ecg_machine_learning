@@ -1,143 +1,487 @@
 import os
-import csv
+import re
+import sys
+import time
+import torch
 import numpy as np
-import pandas as pd
-from scipy import signal
-from scipy.interpolate import interp1d
-import neurokit2 as nk
 import matplotlib.pyplot as plt
+import codecs
+import datetime
+from scipy import signal
+import matplotlib.cm as cm
+import matplotlib
+from scipy.stats import pearsonr
+import pandas as pd
+import csv
+
+from settings import (
+    DATA_DIR,
+    BASE_DIR,
+    PROCESSED_DATA_DIR,
+    OUTPUT_DIR,
+    RAW_DATA_DIR,
+    TEST_DIR,
+    RATE,
+    RATE_15CH,
+    TIME,
+    DATASET_MADE_DATE,
+    OUTPUT_MAE_DIR,
+)
+
+cmap = "tab10"
+
+
+def extract_between_third_and_fourth_underscore(input_string):
+    parts = input_string.split("_")
+    if len(parts) >= 4:
+        result = parts[3]
+        return result
+    else:
+        return None
+
+
+def hpf(d_in, sampling_rate, fp, fs):
+    gpass = 1
+    gstop = 40
+    norm_pass = fp / (sampling_rate / 2)
+    norm_stop = fs / (sampling_rate / 2)
+    N, Wn = signal.cheb2ord(
+        wp=norm_pass, ws=norm_stop, gpass=gpass, gstop=gstop, analog=0
+    )
+    b, a = signal.cheby2(N, gstop, Wn, "high")
+    d_out = signal.filtfilt(b, a, d_in)
+    return d_out
+
+
+def lpf(d_in, sampling_rate, fp, fs):
+    gpass = 1
+    gstop = 40
+    norm_pass = fp / (sampling_rate / 2)
+    norm_stop = fs / (sampling_rate / 2)
+    N, Wn = signal.cheb2ord(
+        wp=norm_pass, ws=norm_stop, gpass=gpass, gstop=gstop, analog=0
+    )
+    b, a = signal.cheby2(N, gstop, Wn, "low")
+    d_out = signal.filtfilt(b, a, d_in)
+    return d_out
+
+
+def min_max_old(x):
+    min_val = x.min(axis=None, keepdims=True)
+    max_val = x.max(axis=None, keepdims=True)
+    if (max_val - min_val) != 0:
+        result = (x - min_val) / (max_val - min_val)
+        return result
+    else:
+        return x * 0
+
+
+def min_max_2(x):
+    num = x.shape[0]
+    for i in range(num):
+        min_val = x[i].min(axis=None, keepdims=True)
+        max_val = x[i].max(axis=None, keepdims=True)
+        if (max_val - min_val) != 0:
+            a = max(abs(max_val), abs(min_val))
+            x[i] = x[i] / (2.0 * a) + 0.5
+    return x
+
+
+def min_max(x, minth, maxth):
+    if (maxth - minth) != 0:
+        result = (x - minth) / (maxth - minth)
+        return np.clip(result, 0, 1.0)
+    else:
+        return x * 0
+
+
+def plot_fig(
+    numplotfig, recon_x, xo, datalength, exp_dir, args, label_name, ecg_ch_names
+):
+    sample_rate = 500
+    sample_num = datalength
+    xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
+    ecg_ch = args.ecg_ch_num
+    for p in range(numplotfig):
+        for q in range(ecg_ch):
+            recon_x2 = torch.reshape(recon_x, (-1, ecg_ch, datalength))
+            xo2 = torch.reshape(xo, (-1, ecg_ch, datalength))
+            plt.rcParams["font.size"] = 16
+            plt.rcParams["xtick.direction"] = "in"
+            plt.rcParams["ytick.direction"] = "in"
+            plt.plot(
+                xticks,
+                recon_x2[p][q].cpu().data.numpy(),
+                color="red",
+                linewidth=1.0,
+                linestyle="-",
+            )
+            plt.plot(
+                xticks,
+                xo2[p][q].cpu().data.numpy(),
+                color="blue",
+                linewidth=1.0,
+                linestyle="-",
+            )
+            plt.xlim(0.0, sample_num / sample_rate)
+            plt.xlabel("second")
+            plt.ylabel("amplitude")
+            plt.axis("on")
+            plt.minorticks_on()
+            plt.grid(which="both", axis="x", alpha=0.8, linestyle="--", linewidth=1)
+            plt.legend(
+                ["predict", "ECG"],
+                bbox_to_anchor=(0.60, 1),
+                loc="upper left",
+                fontsize=16,
+                framealpha=1.0,
+            )
+            plt.title(label_name[p] + "{}".format(ecg_ch_names[q]))
+            plt.tight_layout()
+            save_path = os.path.join(exp_dir, "reconstructed_plots")
+            os.makedirs(save_path, exist_ok=True)
+            plt.savefig(
+                os.path.join(save_path, f"test_{label_name[p]}_ch{q}.png"),
+                dpi=300,
+            )
+            plt.cla()
+            plt.clf()
+            plt.close()
+
+
+def pearson_corr_loss_like_scipy(recon_x, x):
+    recon_x = recon_x.view(recon_x.size(0), -1)
+    x = x.view(x.size(0), -1)
+    losses = []
+    for i in range(recon_x.size(0)):
+        vx = recon_x[i] - torch.mean(recon_x[i])
+        vy = x[i] - torch.mean(x[i])
+        numerator = torch.sum(vx * vy)
+        denominator = torch.sqrt(torch.sum(vx**2)) * torch.sqrt(torch.sum(vy**2)) + 1e-8
+        r = numerator / denominator
+        losses.append(1 - r)
+    return torch.mean(torch.stack(losses))
+
+
+def loss_fn_unet(recon_x, x, beta=0.8):
+    mse_loss = torch.nn.MSELoss(reduction="mean")(recon_x, x)
+    corr_loss = pearson_corr_loss_like_scipy(recon_x, x)
+    return mse_loss + beta * corr_loss
+
+
+def loss_fn_mse_PRT(
+    recon_x, x, mean, log_var, datalength, args, current_weight, pt_index
+):
+    weight_P = current_weight["P"]
+    weight_R = current_weight["R"]
+    weight_T = current_weight["T"]
+    Q_peaks = pt_index[:, 5]
+    S_peaks = pt_index[:, 6]
+    batch_size = x.shape[0]
+    MSE = torch.nn.MSELoss(reduction="sum")
+    MSE_loss = 0.0
+    for i in range(batch_size):
+        index1 = 120
+        index2 = 180
+        recon_x_before_R1 = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, :index1]
+        recon_x_after_R2 = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, index2:]
+        x_before_R1 = x.view(-1, args.ecg_ch_num, datalength)[i, :, :index1]
+        x_after_R2 = x.view(-1, args.ecg_ch_num, datalength)[i, :, index2:]
+        recon_x_R = recon_x.view(-1, args.ecg_ch_num, datalength)[i, :, index1:index2]
+        x_R = x.view(-1, args.ecg_ch_num, datalength)[i, :, index1:index2]
+        MSE_loss_1 = MSE(recon_x_before_R1, x_before_R1)
+        MSE_loss_2 = MSE(recon_x_after_R2, x_after_R2)
+        MSE_loss_R = MSE(recon_x_R, x_R)
+        MSE_loss_keep = (
+            MSE_loss_1 * weight_P + MSE_loss_2 * weight_T + MSE_loss_R * weight_R
+        )
+        MSE_loss = MSE_loss + MSE_loss_keep
+    MSE_loss = MSE_loss / args.ecg_ch_num / datalength / batch_size
+    KLD = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
+    alpha = args.alpha
+    beta = args.beta
+    return (
+        (alpha * MSE_loss + beta * KLD / batch_size),
+        alpha * MSE_loss,
+        beta * KLD / batch_size,
+    )
+
+
+def noise_make(mean, scale, datanum, ch_num):
+    rnd = np.random.normal(loc=mean, scale=scale, size=datanum * ch_num)
+    rnd = rnd.reshape(-1, ch_num, datanum)
+
+
+def tensor_to_ndarray(tensor):
+    if isinstance(tensor, torch.Tensor):
+        z = tensor.detach().cpu().numpy()
+        return z
+    else:
+        raise TypeError("Input must be a torch.Tensor.")
+
+
+def extract_pos_name(string):
+    pattern = r"\w+_\w+_\w+_(\w+)_\w+"
+    match = re.search(pattern, string)
+    if match:
+        last_name = match.group(1)
+        return last_name
+    else:
+        return None
+
+
+def extract_person_name(string):
+    pattern = r"(\w+)_\w+"
+    match = re.search(pattern, string)
+    if match:
+        last_name = match.group(1)
+        return last_name
+    else:
+        return None
+
+
+class RMSELoss(torch.nn.Module):
+    def __init__(self, reduction="mean"):
+        super().__init__()
+        self.mse = torch.nn.MSELoss(reduction=reduction)
+
+    def forward(self, yhat, y):
+        return torch.sqrt(self.mse(yhat, y))
+
+
+class MAE(torch.nn.Module):
+    def __init__(self, reduction="none"):
+        super().__init__()
+        self.mse = torch.nn.MSELoss(reduction=reduction)
+
+    def forward(self, yhat, y):
+        return torch.sqrt(self.mse(yhat, y))
+
+
+class MAE_2(torch.nn.Module):
+    def __init__(self, reduction="none"):
+        super().__init__()
+        self.l1_loss = torch.nn.L1Loss(reduction=reduction)
+
+    def forward(self, yhat, y):
+        return self.l1_loss(yhat, y)
+
+
+def cul_val_no_pt(acc):
+    batch_size = acc.shape[0]
+    acc_list = []
+    for i in range(batch_size):
+        acc_pt_12ch = torch.mean(acc[i, :, :], dim=(0, 1))
+        acc_pt_12ch = acc_pt_12ch.to("cpu").detach().numpy()
+        acc_list.append(acc_pt_12ch)
+    return acc_list
+
+
+def cul_val(pt, acc):
+    batch_size = acc.shape[0]
+    acc_list = []
+    for i in range(batch_size):
+        acc_pt_12ch = torch.mean(acc[i, :, pt[i, 0] : pt[i, 1]], dim=(0, 1))
+        acc_pt_12ch = acc_pt_12ch.to("cpu").detach().numpy()
+        acc_list.append(acc_pt_12ch)
+    return acc_list
+
+
+def cul_val_per_12ch_no_pt(acc):
+    batch_size = acc.shape[0]
+    acc_list = []
+    for i in range(batch_size):
+        acc_pt_12ch = torch.mean(acc[i, :, :], dim=(1))
+        acc_pt_12ch = acc_pt_12ch.to("cpu").detach().numpy()
+        acc_list.append(acc_pt_12ch)
+    return acc_list
+
+
+def cul_val_per_12ch(pt, acc):
+    batch_size = acc.shape[0]
+    acc_list = []
+    for i in range(batch_size):
+        acc_pt_12ch = torch.mean(acc[i, :, pt[i, 0] : pt[i, 1]], dim=(1))
+        acc_pt_12ch = acc_pt_12ch.to("cpu").detach().numpy()
+        acc_list.append(acc_pt_12ch)
+    return acc_list
+
+
+def write_to_csv(file_path, data):
+    file_exists = os.path.exists(file_path)
+    with open(file_path, "a", newline="") as csvfile:
+        fieldnames = [
+            "TARGET_NAME",
+            "MAE_all",
+            "MAE_A1",
+            "MAE_A2",
+            "MAE_V1",
+            "MAE_V2",
+            "MAE_V3",
+            "MAE_V4",
+            "MAE_V5",
+            "MAE_V6",
+            "RMSE_all",
+            "RMSE_A1",
+            "RMSE_A2",
+            "RMSE_V1",
+            "RMSE_V2",
+            "RMSE_V3",
+            "RMSE_V4",
+            "RMSE_V5",
+            "RMSE_V6",
+            "pearson_score",
+        ]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(data)
+
+
+def save_csv2(data, args, exp_dir, label_name, data_rec_or_xo):
+    data = torch.reshape(data, (-1, 8, args.datalength))
+    data_np = data.cpu().numpy() if data.is_cuda else data.numpy()
+    assert len(data.shape) == 3, "Input data shape is incorrect."
+    output_path = os.path.join(exp_dir, "waveforms")
+    os.makedirs(output_path, exist_ok=True)
+    batch_size = data_np.shape[0]
+    for p in range(batch_size):
+        if data_rec_or_xo == "recon_x":
+            output_file = os.path.join(
+                output_path, "{}_reconx.csv".format(label_name[p])
+            )
+        else:
+            output_file = os.path.join(output_path, "{}_xo.csv".format(label_name[p]))
+        df_data = pd.DataFrame(data_np[p])
+        df_data = df_data.T
+        new_columns = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
+        df_data.columns = new_columns
+        df_data.to_csv(output_file, index=None)
+    return output_path
+
+
+class EarlyStopping:
+    def __init__(self, patience=7, verbose=False, delta=0, path="checkpoint.pt"):
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = np.Inf
+        self.delta = delta
+        self.path = path
+
+    def __call__(self, val_loss, model):
+        score = -val_loss
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.verbose:
+                print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model):
+        if self.verbose:
+            print(
+                f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ..."
+            )
+        torch.save(model.state_dict(), self.path)
+        self.val_loss_min = val_loss
+
 
 def create_directory_if_not_exists(directory_path):
-    """指定されたパスにディレクトリが存在しない場合、作成する"""
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
-        print(f"ディレクトリ {directory_path} を作成しました。")
-    else:
-        print(f"ディレクトリ {directory_path} は既に存在しています。")
-
-def lpf(x, sampling_rate, fp, fs):
-    """Low-pass filter"""
-    gpass = 1
-    gstop = 20
-    norm_pass = fp / (sampling_rate / 2)
-    norm_stop = fs / (sampling_rate / 2)
-    N, Wn = signal.cheb2ord(wp=norm_pass, ws=norm_stop, gpass=gpass, gstop=gstop, analog=0)
-    b, a = signal.cheby2(N, gstop, Wn, "low")
-    z = signal.lfilter(b, a, x)
-    return z
-
-def hpf(x, sampling_rate, fp, fs):
-    """High-pass filter"""
-    gpass = 1
-    gstop = 20
-    norm_pass = fp / (sampling_rate / 2)
-    norm_stop = fs / (sampling_rate / 2)
-    N, Wn = signal.cheb2ord(wp=norm_pass, ws=norm_stop, gpass=gpass, gstop=gstop, analog=0)
-    b, a = signal.cheby2(N, gstop, Wn, "high")
-    z = signal.lfilter(b, a, x)
-    return z
-
-def apply_filter(df, sampling_rate, hpf_fp=2.0, hpf_fs=1.0, lpf_fp=0, lpf_fs=0):
-    """データフレームの各列にフィルタを適用する"""
-    df_filtered = df.copy()
-    for column in df.columns:
-        data_col = df[column].values
-        if lpf_fp != 0 and lpf_fs != 0:
-            data_col = lpf(data_col, sampling_rate, lpf_fp, lpf_fs)
-        if hpf_fp != 0 and hpf_fs != 0:
-            data_col = hpf(data_col, sampling_rate, hpf_fp, hpf_fs)
-        df_filtered[column] = data_col
-    return df_filtered
-
-def resample_dataframe(df, old_rate, new_rate):
-    """データフレームを線形補間でリサンプリングする"""
-    if old_rate == new_rate:
-        return df
-    
-    original_time = np.arange(len(df)) / old_rate
-    new_time = np.arange(int(len(df) * new_rate / old_rate)) / new_rate
-    
-    resampled_df = pd.DataFrame(index=new_time, columns=df.columns)
-    
-    for column in df.columns:
-        interpolator = interp1d(original_time, df[column], kind='linear', fill_value="extrapolate")
-        resampled_df[column] = interpolator(new_time)
-        
-    return resampled_df
-
-def find_r_peaks(ecg_signal, sampling_rate):
-    """NeuroKit2を使用してR波ピークを検出する"""
-    _, rpeaks = nk.ecg_peaks(ecg_signal, sampling_rate=sampling_rate)
-    return rpeaks['ECG_R_Peaks']
-
-def find_optimal_shift(peaks1, peaks2, sampling_rate):
-    """2つのピーク時系列のピーク間隔の差分を比較し、最適な時間的シフト（サンプル数）とMSEを返す"""
-    diff1 = np.diff(peaks1)
-    diff2 = np.diff(peaks2)
-
-    min_mse = float('inf')
-    best_shift_idx = 0
-
-    # サイズが小さい方を基準にする
-    if len(diff1) < len(diff2):
-        shorter_diff = diff1
-        longer_diff = diff2
-    else:
-        shorter_diff = diff2
-        longer_diff = diff1
-
-    len_short = len(shorter_diff)
-    len_long = len(longer_diff)
-
-    if len_short == 0:
-        return 0, 0
-
-    for i in range(len_long - len_short + 1):
-        current_subset = longer_diff[i : i + len_short]
-        mse = np.mean((current_subset - shorter_diff) ** 2)
-
-        if mse < min_mse:
-            min_mse = mse
-            # 元のpeaks配列におけるインデックス差をシフト量とする
-            if len(diff1) < len(diff2):
-                best_shift_idx = peaks2[i] - peaks1[0]
-            else:
-                best_shift_idx = peaks1[i] - peaks2[0]
-
-    return best_shift_idx, min_mse
 
 
-def get_pqrst_waves(ecg_signal, rpeaks, sampling_rate):
-    """NeuroKit2を使用してPQRST波の各点を検出する"""
-    _, waves = nk.ecg_delineate(
-        ecg_signal,
-        rpeaks,
-        sampling_rate=sampling_rate,
-        method="dwt", # DWT法はロバスト性が高い
-    )
-    return waves
+def plot_fig_test_name_8ch_2row(
+    recon_x,
+    xo,
+    datalength,
+    exp_dir,
+    args,
+    batch_size_num,
+    label_name,
+    acc,
+    pt_index,
+    ecg_ch_names,
+):
+    sample_rate = 500
+    sample_num = datalength
+    xticks = np.linspace(0.0, 1.0 / sample_rate * sample_num, sample_num)
+    ecg_ch = args.ecg_ch_num
+    recon_x_reshaped = torch.reshape(recon_x, (-1, ecg_ch, datalength))
+    xo_reshaped = torch.reshape(xo, (-1, ecg_ch, datalength))
 
-def plot_ecg_with_events(ecg_signal, rpeaks, waves):
-    """ECG信号と検出されたイベント（PQRST）をプロットする"""
-    plt.figure(figsize=(15, 6))
-    plt.plot(ecg_signal, label="ECG Signal", color="grey")
-    
-    # R-peaks
-    plt.scatter(rpeaks, ecg_signal[rpeaks], color='red', s=50, label='R-peaks')
-    
-    # P, Q, S, T waves
-    for wave_type in ['ECG_P_Onsets', 'ECG_P_Peaks', 'ECG_P_Offsets', 
-                      'ECG_Q_Peaks', 'ECG_S_Peaks', 
-                      'ECG_T_Onsets', 'ECG_T_Peaks', 'ECG_T_Offsets']:
-        points = waves.get(wave_type, [])
-        valid_points = [p for p in points if not np.isnan(p)]
-        if valid_points:
-            plt.scatter(valid_points, ecg_signal[valid_points], label=wave_type, s=40)
-            
-    plt.legend()
-    plt.title("ECG Signal with PQRST Delineation")
-    plt.xlabel("Sample")
-    plt.ylabel("Amplitude")
-    plt.grid(True)
-    plt.show()
+    for p in range(batch_size_num):
+        fig, axs = plt.subplots(2, 4, figsize=(20, 10))
+        fig.suptitle(f"{label_name[p]}", fontsize=20)
 
+        for q in range(ecg_ch):
+            row = q // 4
+            col = q % 4
+            ax = axs[row, col]
+
+            recon_data = recon_x_reshaped[p][q].cpu().data.numpy()
+            xo_data = xo_reshaped[p][q].cpu().data.numpy()
+
+            ax.plot(
+                xticks,
+                recon_data,
+                color="red",
+                linewidth=1.0,
+                linestyle="-",
+                label="predict",
+            )
+            ax.plot(
+                xticks, xo_data, color="blue", linewidth=1.0, linestyle="-", label="ECG"
+            )
+
+            ax.set_xlim(0.0, sample_num / sample_rate)
+            ax.set_xlabel("second")
+            ax.set_ylabel("amplitude")
+            ax.grid(which="both", axis="x", alpha=0.8, linestyle="--", linewidth=1)
+            ax.set_title(f"{ecg_ch_names[q]}")
+            ax.legend()
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        save_path = os.path.join(exp_dir, "reconstructed_plots")
+        os.makedirs(save_path, exist_ok=True)
+        plt.savefig(
+            os.path.join(save_path, f"test_all_channel_{label_name[p]}.svg"),
+            dpi=300,
+        )
+        plt.cla()
+        plt.clf()
+        plt.close(fig)
+
+
+def total_variation_loss(y_pred, weight=1.0):
+    # ... (existing function) ...
+    return weight * tv_loss / batch_size
+
+
+def add_gaussian_noise(signal, noise_level=0.05):
+    """Adds Gaussian noise to a signal."""
+    noise = np.random.normal(0, noise_level, signal.shape)
+    return signal + noise
+
+
+def scale_amplitude(signal, scale_range=(0.9, 1.1)):
+    """Scales the amplitude of a signal by a random factor."""
+    scale_factor = np.random.uniform(scale_range[0], scale_range[1])
+    return signal * scale_factor
+
+
+def add_baseline_wander(signal, wander_freq=0.05, wander_amplitude=0.1):
+    """Adds baseline wander to a signal."""
+    t = np.arange(len(signal))
+    wander = wander_amplitude * np.sin(2 * np.pi * wander_freq * t / len(signal))
+    return signal + wander
