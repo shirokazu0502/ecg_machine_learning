@@ -4,8 +4,11 @@ import os
 from settings import OUTPUT_DIR, OUTPUT_MAE_DIR, RATE
 
 
+import datetime
+
+
 def get_args():
-    current_time = "0929_ch15_unet_batch16"
+    current_time = datetime.date.today().strftime("LSTM_%Y%m%d")
     datalength = int(RATE * 0.8)
 
     parser = argparse.ArgumentParser()
@@ -40,7 +43,7 @@ def get_args():
         "--fig_root", type=str, default=OUTPUT_DIR + "/" + f"figs_newref/{current_time}"
     )
     parser.add_argument(
-        "--mae_folder", type=str, default=OUTPUT_MAE_DIR + "/" + f"/{current_time}"
+        "--mae_folder", type=str, default=OUTPUT_MAE_DIR + f"/{current_time}"
     )
     parser.add_argument("--conditional", action="store_true")
     parser.add_argument("--train_off", action="store_false")
@@ -60,5 +63,7 @@ def get_args():
     )
     parser.add_argument("--ave_data_flg", type=int, default=0)
     parser.add_argument("--base_filters", type=int, default=128)
+    parser.add_argument("--lstm_hidden_size", type=int, default=128)
+    parser.add_argument("--lstm_num_layers", type=int, default=2)
     args = parser.parse_args()
     return args

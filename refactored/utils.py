@@ -468,6 +468,20 @@ def total_variation_loss(y_pred, weight=1.0):
     return weight * tv_loss / batch_size
 
 
+def smoothness_loss(recon_x, weight=0.1):
+    # Calculate the L2 norm of the first derivative (difference between adjacent points)
+    # recon_x shape: (batch_size, num_channels, datalength)
+    diff = recon_x[:, :, 1:] - recon_x[:, :, :-1]
+    smooth_loss = torch.mean(diff**2)
+    return weight * smooth_loss
+
+
+def loss_fn_lstm(recon_x, x, smoothness_weight=0.1):
+    mse_loss = torch.nn.MSELoss(reduction="mean")(recon_x, x)
+    s_loss = smoothness_loss(recon_x, weight=smoothness_weight)
+    return mse_loss + s_loss
+
+
 def add_gaussian_noise(signal, noise_level=0.05):
     """Adds Gaussian noise to a signal."""
     noise = np.random.normal(0, noise_level, signal.shape)

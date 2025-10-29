@@ -1,4 +1,3 @@
-
 import sys
 import os
 
@@ -21,6 +20,7 @@ import arguments as config
 import Dataset
 import time
 
+
 def train_simple_vae(
     model,
     train_loader,
@@ -38,7 +38,9 @@ def train_simple_vae(
             x, xo = x.to(device), xo.to(device)
             optimizer.zero_grad()
             recon_x, mean, log_var, z = model(x)
-            loss, mse, kdl = criterion(recon_x, xo, mean, log_var, args.datalength, args)
+            loss, mse, kdl = criterion(
+                recon_x, xo, mean, log_var, args.datalength, args
+            )
             loss.backward()
             optimizer.step()
             total_train_loss += loss.item()
@@ -46,6 +48,7 @@ def train_simple_vae(
         avg_train_loss = total_train_loss / len(train_loader)
         print(f"Epoch [{epoch + 1}/{epochs}], Loss: {avg_train_loss:.4f}")
         writer.add_scalar("Loss/train", avg_train_loss, epoch)
+
 
 def main():
     utils.create_directory_if_not_exists("model_pth")
@@ -57,14 +60,16 @@ def main():
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
-    writer = SummaryWriter(log_dir=f"runs/{args.current_time}/{args.TARGET_NAME}/SimpleVAE_log")
+    writer = SummaryWriter(
+        log_dir=f"runs/{args.current_time}/{args.TARGET_NAME}/SimpleVAE_log"
+    )
 
     train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
         TARGET_NAME=args.TARGET_NAME,
         transform_type=args.transform_type,
         Dataset_name=args.Dataset_name,
         dataset_num=args.dataset_num,
-        DataAugumentation=args.p_augumentation, # Using p_aug as a generic one
+        DataAugumentation=args.p_augumentation,  # Using p_aug as a generic one
         ave_data_flg=args.ave_data_flg,
         num_channels=args.num_channels,
     )
@@ -92,7 +97,7 @@ def main():
         "num_labels": 20 if args.conditional else 0,
         "num_channels": args.num_channels,
     }
-    
+
     model = VAE(**common_kwargs).to(device)
 
     if args.mode == "train":
@@ -101,13 +106,13 @@ def main():
             dataset=train_dataset, batch_size=args.train_batch_size, shuffle=True
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-        
+
         print("Training Simple VAE...")
         train_simple_vae(
             model,
             train_loader,
             optimizer,
-            utils.loss_fn_mse, # Using standard MSE loss for simplicity
+            utils.loss_fn_mse,  # Using standard MSE loss for simplicity
             args.epochs,
             device,
             writer,
@@ -121,6 +126,7 @@ def main():
         writer.close()
 
     # Test mode can be added here if needed
+
 
 if __name__ == "__main__":
     main()

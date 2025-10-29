@@ -334,3 +334,31 @@ class UNet1D(nn.Module):
         output = self.out_conv(d1)
 
         return output
+
+
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, datalength):
+        super(LSTMModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.output_size = output_size
+        self.datalength = datalength
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        # x shape: (batch_size, num_channels, datalength)
+        # Permute to (batch_size, datalength, num_channels) for LSTM
+        x = x.permute(0, 2, 1)  # (batch_size, datalength, input_size)
+
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+
+        out, _ = self.lstm(x, (h0, c0))
+        # out shape: (batch_size, datalength, hidden_size)
+        out = self.fc(out)
+        # out shape: (batch_size, datalength, output_size)
+
+        # Permute back to (batch_size, output_size, datalength)
+        out = out.permute(0, 2, 1)
+        return out
