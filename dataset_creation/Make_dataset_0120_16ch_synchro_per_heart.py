@@ -245,7 +245,7 @@ def data_plot_after_splitting2(
     )  # rect指定の順番は左下原点で(left,bottom,right,top). suptitle+tight_layout組み合わせる場合は注意
     fig.patch.set_facecolor("white")  # 背景色を白にする
 
-    plt.show()
+    # plt.show()
     # if savefig:
     # fig.savefig(figpath+'/'+target_name+'.png') # 背景を透明にしたければtransparent=Trueオプションを付ければ良いっぽい
 
@@ -365,7 +365,7 @@ def peak_sc_plot(dataframe, RATE, TARGET):
     plt.plot(time, dataframe[TARGET])
     plt.title(TARGET)
     # print(sc)
-    plt.show()
+    # plt.show()
     plt.close()
     # print(sc)
     # input()
@@ -504,7 +504,7 @@ def multi_pf(df, fp, fs):
 #     plt.legend(loc='upper right')
 
 #     plt.tight_layout()
-#     # plt.show()
+#     # # plt.show()
 
 
 #     return 0.0
@@ -573,7 +573,7 @@ class ArrayComparator:
         plt.ylabel("diff(s)")
 
         # グラフの表示
-        plt.show()
+        # plt.show()
         plt.close()
 
     def find_best_cut_time(self):
@@ -651,13 +651,13 @@ class ArrayComparator:
     #     corr_max_time = corr_max_idx * RESAMPLE_RESOLUTION
 
     #     plt.plot(corr_list, label="corr", color="r")
-    #     plt.show()
+    #     # plt.show()
     #     plt.plot(res_time1 + corr_max_time, res_diff_12ch, label="12ch", color="green")
     #     plt.plot(res_time2, res_diff_15ch, label="15ch", color="orange")
-    #     plt.show()
+    #     # plt.show()
     #     plt.plot(time1 + corr_max_time, diff_12ch, label="12ch", color="r")
     #     plt.plot(time2, diff_15ch, label="15ch", color="b")
-    #     plt.show()
+    #     # plt.show()
 
     #     return corr_max_time
 
@@ -687,7 +687,7 @@ class ArrayComparator:
         plt.ylabel("diff(s)")
 
         # グラフの表示
-        plt.show()
+        # plt.show()
         plt.close()
 
 
@@ -773,7 +773,7 @@ class MultiPlotter_both:
         # plt.savefig(png_path)
         plt.savefig("goto_12ch_16ch.svg")
         plt.savefig("goto_12ch_16ch.png")
-        plt.show()
+        # plt.show()
 
     def multi_plot_12ch_16ch_with_sc(self, xmin, xmax, ylim, sc, ch, png_path):
         print(len(self.df12))
@@ -884,7 +884,7 @@ class MultiPlotter_both:
 
         plt.tight_layout()
         plt.savefig(png_path)
-        # plt.show()
+        # # plt.show()
 
 
 class MultiPlotter:
@@ -930,7 +930,7 @@ class MultiPlotter:
         plt.yticks(fontsize=30)
         plt.xlabel("t(s)", fontsize=30)
         plt.tight_layout()
-        # plt.show()
+        # # plt.show()
 
         return 0.0
 
@@ -1008,7 +1008,7 @@ class MultiPlotter:
         plt.legend(loc="upper right")
 
         plt.tight_layout()
-        # plt.show()
+        # # plt.show()
 
         return 0.0
 
@@ -1098,7 +1098,7 @@ class MultiPlotter:
         plt.legend(loc="upper right")
 
         plt.tight_layout()
-        # plt.show()
+        # # plt.show()
 
         return 0.0
 
@@ -1189,7 +1189,7 @@ class MultiPlotter:
         plt.legend(loc="upper right")
 
         plt.tight_layout()
-        # plt.show()
+        # # plt.show()
         return 0.0
 
     def multi_plot_16ch(self, xmin, xmax, ylim):
@@ -1266,7 +1266,7 @@ class MultiPlotter:
         plt.legend(loc="upper right")
 
         plt.tight_layout()
-        # plt.show()
+        # # plt.show()
         return 0.0
 
     def multi_plot_16ch(self, xmin, xmax, ylim):
@@ -1343,7 +1343,7 @@ class MultiPlotter:
         plt.legend(loc="upper right")
 
         plt.tight_layout()
-        # plt.show()
+        # # plt.show()
         return 0.0
 
 
@@ -1470,15 +1470,17 @@ class AutoIntegerFileHandler:
 
     def check_file(self):
         path = self.filename
-        if os.path.exists(path):
-            if os.path.isfile(path):
-                print(f"The path '{path}' exists and it is a file.")
-                if input("ok? y or n") == "y":
-                    return True
-                # return True
-        else:
-            print(f"The path '{path}' does not exist.")
         return False
+        # 20251029 コメントアウト
+        # if os.path.exists(path):
+        #     if os.path.isfile(path):
+        #         print(f"The path '{path}' exists and it is a file.")
+        #         if input("ok? y or n") == "y":
+        #             return True
+        #         # return True
+        # else:
+        #     print(f"The path '{path}' does not exist.")
+        # return False
 
     def input_integer(self, RATE, cut_time):
         time = cut_time
@@ -1735,7 +1737,7 @@ def plot_heartbeats_sotoume(data, num, p_onset, t_offset):
     # ax1.xaxis.set_major_locator(MultipleLocator(0.8))
     plt.tight_layout()
     plt.savefig("goto_heartbeat_sotoume_legned{}.png".format(num))
-    plt.show()
+    # plt.show()
 
 
 def plot_heartbeats(data, num):
@@ -1792,7 +1794,7 @@ def plot_heartbeats(data, num):
     # ax1.xaxis.set_major_locator(MultipleLocator(0.8))
     plt.tight_layout()
     plt.savefig("goto_heartbeat{}.svg".format(num))
-    plt.show()
+    # plt.show()
 
 
 def find_qrs_boundary(
@@ -2213,10 +2215,10 @@ def PQRST_plot_one(ecg, sampling_rate, header):
     plt.savefig(compare_path + "/12ch_" + header + "_" + args.type + ".png")
     # print(waves_peak)
     # input()
-    plt.show()
+    # plt.show()
     if DEBUG_PLOT == True:
-        plt.show()
-    plt.close()
+        # plt.show()
+        plt.close()
 
 
 def PQRST_plot(ecg, sampling_rate, headers):
@@ -2233,7 +2235,7 @@ def PQRST_plot(ecg, sampling_rate, headers):
             show_type="all",
         )
         plt.title(headers[i])
-        plt.show()
+        # plt.show()
 
 
 def PQRST_plot_grid_16ch(ecg_list, sampling_rate, headers, args):
@@ -2332,9 +2334,9 @@ def PQRST_plot_grid_16ch(ecg_list, sampling_rate, headers, args):
     create_directory_if_not_exists(compare_path)
     # plt.savefig(compare_path+'/16ch'+args.type+'.png')
     if DEBUG_PLOT == True:
-        plt.show()
-    # plt.show()
-    plt.close()
+        # plt.show()
+        # # plt.show()
+        plt.close()
 
 
 def PQRST_plot_grid(ecg_list, sampling_rate, headers, args):
@@ -2425,9 +2427,9 @@ def PQRST_plot_grid(ecg_list, sampling_rate, headers, args):
     create_directory_if_not_exists(compare_path)
     plt.savefig(compare_path + "/12ch" + args.type + ".png")
     if DEBUG_PLOT == True:
-        plt.show()
-    plt.show()
-    plt.close()
+        # plt.show()
+        # plt.show()
+        plt.close()
 
 
 def find_p_element(
@@ -2509,7 +2511,7 @@ def plot_and_select(ecg_all, rpeak, window=200):
     # plt.ylabel("Amplitude")
     # plt.legend()
     # plt.grid(True)
-    # plt.show()
+    # # plt.show()
     # 列数取得
     columns = ecg_all.columns
     plt.figure(figsize=(12, 6))
@@ -2536,7 +2538,7 @@ def plot_and_select(ecg_all, rpeak, window=200):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.show()
+    # plt.show()
     plt.close()
 
     # ユーザー入力
@@ -2593,10 +2595,10 @@ def PTwave_search(ecg_A2, sampling_rate, header, args, time_length):
     compare_path = os.path.join(args.file_path, "..", "..")
     create_directory_if_not_exists(compare_path)
     plt.savefig(compare_path + "/12ch" + args.type + ".png")
-    # plt.show()
+    # # plt.show()
     if DEBUG_PLOT == True:
-        plt.show()
-    plt.close()
+        # plt.show()
+        plt.close()
     print(valid_ecg_t_offsets)
     print(valid_ecg_p_onsets)
     print(
@@ -2706,7 +2708,7 @@ def plot_and_select_all_points(ecg_all, rpeak, window=200):
     cid = fig.canvas.mpl_connect(
         "button_press_event", lambda event: handle_click(event, coords)
     )
-    plt.show()
+    # plt.show()
 
     # 特徴点を返す
     if len(coords) == 8:
@@ -2889,8 +2891,8 @@ def PTwave_search3(
     create_directory_if_not_exists(compare_path)
     plt.savefig(compare_path + "/12ch" + args.type + ".png")
     if DEBUG_PLOT == True:
-        plt.show()
-    plt.close()
+        # plt.show()
+        plt.close()
     print(valid_ecg_t_offsets)
     print(valid_ecg_p_onsets)
     print(
@@ -2902,11 +2904,13 @@ def PTwave_search3(
     print(rpeaks)
     print("yaaaaa")
     rpeak_num = len(rpeaks)
-    manual_setting = int(
-        input(
-            f"目視で手動設定を行う:1, ファイル読み込みで設定を行う:2 neurokitを用いる:3\n"
-        )
-    )
+    # 20251029 コメントアウト
+    # manual_setting = int(
+    #     input(
+    #         f"目視で手動設定を行う:1, ファイル読み込みで設定を行う:2 neurokitを用いる:3\n"
+    #     )
+    # )
+    manual_setting = 3
     save_data_num = 0  # 保存できた波形の数（条件を満たさなかったデータを除く）
     for i in range(rpeak_num):
         rpeak = rpeaks[i]
@@ -3130,9 +3134,8 @@ def PTwave_plot(ecg_list, sampling_rate, headers, args):
     create_directory_if_not_exists(compare_path)
     # plt.savefig(compare_path+'/12ch'+args.type+'.png')
     if DEBUG_PLOT == True:
-        plt.show()
-    plt.show()
-    plt.close()
+        # plt.show()
+        plt.close()
 
 
 def lowpass_filter(signal, sampling_rate, cutoff=0.5, order=5):
@@ -3167,7 +3170,7 @@ def ecg_clean_df_12ch(df_12ch, rate=RATE):
     # print(type(df_12ch_cleaned))
     # plt.plot(df_12ch_cleaned["A2"])
     # plt.title("cleaned")
-    # plt.show()
+    # # plt.show()
     return df_12ch_cleaned
 
 
@@ -3196,7 +3199,7 @@ def ecg_clean_df_16ch(df_16ch, rate):
     # for axis in ["top", "bottom", "left", "right"]:
     #     ax1.spines[axis].set_linewidth(axis_line_width)
     # plt.tight_layout()
-    # plt.show()
+    # # plt.show()
     return df_16ch_cleaned
 
 
@@ -3367,22 +3370,23 @@ def main(args):
         Plot_16ch_pf = MultiPlotter(df_resample_16ch, RATE=RATE)
         Plot_16ch_pf.multi_plot(xmin=0, xmax=100, ylim=0)
         Plot_16ch_pf.multi_plot_16ch_with_sc(xmin=0, xmax=20, ylim=0, sc=sc_16ch)
-        plt.show()
+        # plt.show()
         plt.close()
         print(int(best_cut_time * RATE))
-        if input("write_to_CSV OK? y or n") == "y":
-            handler.write_integer(
-                RATE=RATE,
-                best_rate=best_rate,
-                cut_time=best_cut_time,
-                target_16ch=TARGET_CHANNEL_16ch,
-                reverse=reverse,
-                target_12ch=TARGET_CHANNEL_12CH,
-                cut_min_max_range=cut_min_max_range,
-            )
+        # 20251029 コメントアウト
+        # if input("write_to_CSV OK? y or n") == "y":
+        #     handler.write_integer(
+        #         RATE=RATE,
+        #         best_rate=best_rate,
+        #         cut_time=best_cut_time,
+        #         target_16ch=TARGET_CHANNEL_16ch,
+        #         reverse=reverse,
+        #         target_12ch=TARGET_CHANNEL_12CH,
+        #         cut_min_max_range=cut_min_max_range,
+        #     )
 
-        else:
-            return 0
+        # else:
+        #     return 0
 
     else:  # 同期するファイルが存在しているとき。
         # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=HPF_FP,HPF_fs=HPF_FS,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
@@ -3433,7 +3437,7 @@ def main(args):
             ch=TARGET_CHANNEL_16ch,
             png_path=args.png_path + "12chsc",
         )
-        plt.show()
+        # plt.show()
         plt.close()
         # input()
 
@@ -3449,7 +3453,7 @@ def main(args):
     print(df_syn_resample_16ch_24s)
     # plt.plot(df_syn_resample_16ch_24s["ch_1"])
     # plt.plot(df_12ch_cleaned["A2"])
-    # plt.show()
+    # # plt.show()
 
     # 12chと16chのそれぞれを正規化
     df_12ch_cleaned = normalize_data(df_12ch_cleaned)
@@ -3548,7 +3552,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # args.name='goto'#yoshikura takahashi matumoto
     # args.date='1219'
-    args.name, args.date = select_name_and_date()
+
+    # args.name, args.date = select_name_and_date()
     args.peak_method = (
         "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
     )
