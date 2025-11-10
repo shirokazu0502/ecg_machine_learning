@@ -101,7 +101,7 @@ def process_subject(subject_dir, col_d, col_m, col_p):
     """
     Processes all heartbeat CSVs for a single subject to calculate and save the mean cardiac axis.
     """
-    source_data_path = os.path.join(subject_dir, "0", "moving_ave_datasets")
+    source_data_path = os.path.join(subject_dir, "moving_ave_datasets")
     if not os.path.isdir(source_data_path):
         print(f"Error: 'moving_ave_datasets' directory not found in {subject_dir}")
         return
