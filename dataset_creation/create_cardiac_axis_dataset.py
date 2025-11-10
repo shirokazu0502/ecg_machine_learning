@@ -10,38 +10,66 @@ from tqdm import tqdm
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(base_dir)
 
-# --- Constants ---
-# The QRS complex is centered around index 150 in the source data.
-# We define a window around it to calculate the integral.
-QRS_WINDOW_START = 100
-QRS_WINDOW_END = 200
+def find_qrs_peaks(signal, r_peak_center=150, r_search_window=25, qs_search_offset=50):
+    """
+    Finds Q, R, S peak indices in a given signal, accounting for polarity inversion.
+    """
+    signal_np = signal.to_numpy() if isinstance(signal, pd.Series) else signal
+    signal_len = len(signal_np)
 
-def calculate_axis_integral(signal_h, signal_v):
-    """Calculates cardiac axis based on signal area (integral)."""
-    qrs_integral_v = np.sum(signal_v[QRS_WINDOW_START:QRS_WINDOW_END])
-    qrs_integral_h = np.sum(signal_h[QRS_WINDOW_START:QRS_WINDOW_END])
-    angle_rad = np.arctan2(qrs_integral_v, qrs_integral_h)
-    return np.degrees(angle_rad)
-
-def calculate_axis_amplitude_from_peaks(signal_h, signal_v, q_peak_idx, r_peak_idx, s_peak_idx):
-    """Calculates cardiac axis based on QRS amplitude using provided peak indices."""
+    # Determine polarity by finding the point with max absolute value around the center
+    center_search_start = max(0, r_peak_center - r_search_window)
+    center_search_end = min(signal_len, r_peak_center + r_search_window)
+    center_slice = signal_np[center_search_start:center_search_end]
     
-    signal_len = len(signal_h)
-    if not all(0 <= idx < signal_len for idx in [q_peak_idx, r_peak_idx, s_peak_idx]):
-        raise IndexError(f"Peak index out of bounds. Indices: [Q:{q_peak_idx}, R:{r_peak_idx}, S:{s_peak_idx}], Signal length: {signal_len}")
+    if len(center_slice) == 0: # Handle empty slice
+        return r_peak_center, r_peak_center, r_peak_center
 
-    # Convert to numpy for consistent indexing if they are pandas Series
-    signal_h_np = signal_h.to_numpy()
-    signal_v_np = signal_v.to_numpy()
+    abs_max_idx_in_slice = np.argmax(np.abs(center_slice))
+    is_inverted = center_slice[abs_max_idx_in_slice] < 0
 
-    # Extract amplitudes directly using indices, respecting their signs
-    q_amp_h = signal_h_np[q_peak_idx]
-    r_amp_h = signal_h_np[r_peak_idx]
-    s_amp_h = signal_h_np[s_peak_idx]
+    # --- Find Peaks based on polarity ---
+    if not is_inverted: # Normal QRS (R is positive)
+        r_peak_idx = center_search_start + np.argmax(center_slice)
+        
+        q_search_start = max(0, r_peak_idx - qs_search_offset)
+        q_search_end = r_peak_idx
+        q_peak_idx = q_search_start + np.argmin(signal_np[q_search_start:q_search_end]) if q_search_start < q_search_end else r_peak_idx
+
+        s_search_start = r_peak_idx
+        s_search_end = min(signal_len, r_peak_idx + qs_search_offset)
+        s_peak_idx = s_search_start + np.argmin(signal_np[s_search_start:s_search_end]) if s_search_start < s_search_end else r_peak_idx
+    else: # Inverted QRS (R is negative)
+        r_peak_idx = center_search_start + np.argmin(center_slice)
+
+        q_search_start = max(0, r_peak_idx - qs_search_offset)
+        q_search_end = r_peak_idx
+        q_peak_idx = q_search_start + np.argmax(signal_np[q_search_start:q_search_end]) if q_search_start < q_search_end else r_peak_idx
+
+        s_search_start = r_peak_idx
+        s_search_end = min(signal_len, r_peak_idx + qs_search_offset)
+        s_peak_idx = s_search_start + np.argmax(signal_np[s_search_start:s_search_end]) if s_search_start < s_search_end else r_peak_idx
+        
+    return q_peak_idx, r_peak_idx, s_peak_idx
+
+def calculate_axis_with_re_peaking(signal_h, signal_v):
+    """
+    Calculates cardiac axis by re-finding QRS peaks on the orthogonal signals.
+    """
+    q_peak_idx_h, r_peak_idx_h, s_peak_idx_h = find_qrs_peaks(signal_h)
+    q_peak_idx_v, r_peak_idx_v, s_peak_idx_v = find_qrs_peaks(signal_v)
+
+    signal_h_np = signal_h.to_numpy() if isinstance(signal, pd.Series) else signal
+    signal_v_np = signal_v.to_numpy() if isinstance(signal, pd.Series) else signal
+
+    # Extract amplitudes using re-found peaks
+    q_amp_h = signal_h_np[q_peak_idx_h]
+    r_amp_h = signal_h_np[r_peak_idx_h]
+    s_amp_h = signal_h_np[s_peak_idx_h]
     
-    q_amp_v = signal_v_np[q_peak_idx]
-    r_amp_v = signal_v_np[r_peak_idx]
-    s_amp_v = signal_v_np[s_peak_idx]
+    q_amp_v = signal_v_np[q_peak_idx_v]
+    r_amp_v = signal_v_np[r_peak_idx_v]
+    s_amp_v = signal_v_np[s_peak_idx_v]
 
     # Net amplitude is the algebraic sum of Q, R, and S amplitudes.
     net_amp_h = q_amp_h + r_amp_h + s_amp_h
@@ -52,7 +80,7 @@ def calculate_axis_amplitude_from_peaks(signal_h, signal_v, q_peak_idx, r_peak_i
 
 def process_subject(subject_dir, col_d, col_m, col_p):
     """
-    Processes all heartbeat CSVs for a single subject to add the cardiac axis.
+    Processes all heartbeat CSVs for a single subject to calculate and save the mean cardiac axis.
     """
     source_data_path = os.path.join(subject_dir, "0", "moving_ave_datasets")
     if not os.path.isdir(source_data_path):
@@ -61,9 +89,8 @@ def process_subject(subject_dir, col_d, col_m, col_p):
 
     # Define paths
     subject_name = os.path.basename(subject_dir)
-    output_dir = os.path.join(base_dir, "data", "processed", "cardiac_axis_dataset", subject_name, "0", "moving_ave_datasets")
+    output_dir = os.path.join(base_dir, "data", "processed", "cardiac_axis_dataset", subject_name, "0")
     os.makedirs(output_dir, exist_ok=True)
-    ponset_dir = os.path.join(subject_dir, "0") # Path to ponset_toffset files
 
     # Find all dataset files
     files_to_process = sorted(glob.glob(os.path.join(source_data_path, "dataset_*.csv")))
@@ -71,64 +98,49 @@ def process_subject(subject_dir, col_d, col_m, col_p):
         print(f"No dataset CSVs found for subject {subject_name}")
         return
 
-    print(f"Processing {len(files_to_process)} files for subject: {subject_name}")
-    
-    for file_path in tqdm(files_to_process, desc=f"Processing {subject_name}"):
-        try:
-            # --- Load beat signal data ---
+    print(f"Averaging {len(files_to_process)} beats for subject: {subject_name}")
+
+    try:
+        # --- Load all beats and calculate the average waveform ---
+        all_beats = []
+        # Use the first file to get header information
+        first_df = pd.read_csv(files_to_process[0])
+        column_names = first_df.columns
+
+        for file_path in tqdm(files_to_process, desc=f"Loading beats for {subject_name}"):
             df = pd.read_csv(file_path)
-            
-            # --- Load corresponding peak index data ---
-            file_id = os.path.basename(file_path).split('_')[-1].replace('.csv', '')
-            ponset_path = os.path.join(ponset_dir, f"ponset_toffset_{file_id}.csv")
-            
-            if not os.path.exists(ponset_path):
-                print(f"Warning: ponset_toffset file not found for {os.path.basename(file_path)}. Cardiac axis (amplitude) will not be calculated.")
-                df['cardiac_axis_amplitude'] = np.nan # Add column with NaN
-            else:
-                peaks_df = pd.read_csv(ponset_path)
-                # Get indices from the first row of the peaks file
-                peak_indices = peaks_df.iloc[0]
-                q_peak_idx = int(peak_indices['q_peak'])
-                r_peak_idx = 150 # Hardcoded value as requested
-                s_peak_idx = int(peak_indices['s_peak'])
+            all_beats.append(df.to_numpy())
+        
+        # Calculate the mean across all beats
+        mean_waveform_np = np.mean(all_beats, axis=0)
+        mean_waveform_df = pd.DataFrame(mean_waveform_np, columns=column_names)
 
-                # Ensure columns exist
-                for col in [col_d, col_m, col_p]:
-                    if col not in df.columns:
-                        raise ValueError(f"Column '{col}' not found in the dataframe.")
+        # --- Calculate cardiac axis from the average waveform ---
+        print("Calculating cardiac axis from average waveform...")
+        # Ensure columns exist
+        for col in [col_d, col_m, col_p]:
+            if col not in mean_waveform_df.columns:
+                raise ValueError(f"Column '{col}' not found in the average waveform dataframe.")
 
-                # Define orthogonal vectors
-                signal_v = df[col_p] - df[col_m]
-                signal_h = df[col_d] - df[col_p]
+        # Define orthogonal vectors
+        signal_v = mean_waveform_df[col_p] - mean_waveform_df[col_m]
+        signal_h = mean_waveform_df[col_d] - mean_waveform_df[col_p]
 
-                # Calculate axis using the new amplitude method
-                axis_amplitude = calculate_axis_amplitude_from_peaks(signal_h, signal_v, q_peak_idx, r_peak_idx, s_peak_idx)
-                df['cardiac_axis_amplitude'] = axis_amplitude
+        # Calculate axis using the new amplitude method
+        axis_amplitude = calculate_axis_with_re_peaking(signal_h, signal_v)
 
-            # --- Calculate integral-based axis (unchanged) ---
-            # This part is kept as is, assuming it's still needed for comparison.
-            # Ensure columns exist for this calculation as well
-            required_cols_integral = [col_d, col_m, col_p]
-            if all(col in df.columns for col in required_cols_integral):
-                signal_v_integral = df[col_p] - df[col_m]
-                signal_h_integral = df[col_d] - df[col_p]
-                axis_integral = calculate_axis_integral(signal_h_integral, signal_v_integral)
-                df['cardiac_axis_integral'] = axis_integral
-            else:
-                df['cardiac_axis_integral'] = np.nan
+        # --- Save the result to a summary file ---
+        summary_filepath = os.path.join(output_dir, "cardiac_axis_summary.txt")
+        with open(summary_filepath, 'w') as f:
+            f.write(f"# Cardiac Axis Calculation Summary\n")
+            f.write(f"Subject: {subject_name}\n")
+            f.write(f"Number of beats averaged: {len(all_beats)}\n")
+            f.write(f"Calculated cardiac axis (amplitude-based): {axis_amplitude:.2f} degrees\n")
 
+        print(f"Finished processing for {subject_name}. Summary saved in {summary_filepath}")
 
-            # Save to new location
-            output_filename = os.path.basename(file_path)
-            output_filepath = os.path.join(output_dir, output_filename)
-            df.to_csv(output_filepath, index=False)
-
-        except Exception as e:
-            print(f"Could not process file {file_path}. Error: {e}")
-            continue
-            
-    print(f"Finished processing for {subject_name}. New dataset saved in {output_dir}")
+    except Exception as e:
+        print(f"Could not process subject {subject_name}. Error: {e}")
 
 
 def main():
