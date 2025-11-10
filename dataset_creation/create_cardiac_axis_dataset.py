@@ -77,8 +77,8 @@ def calculate_axis_with_re_peaking(signal_h, signal_v):
     q_peak_idx_h, r_peak_idx_h, s_peak_idx_h = find_qrs_peaks(signal_h)
     q_peak_idx_v, r_peak_idx_v, s_peak_idx_v = find_qrs_peaks(signal_v)
 
-    signal_h_np = signal_h.to_numpy() if isinstance(signal, pd.Series) else signal
-    signal_v_np = signal_v.to_numpy() if isinstance(signal, pd.Series) else signal
+    signal_h_np = signal_h.to_numpy()
+    signal_v_np = signal_v.to_numpy()
 
     # Extract amplitudes using re-found peaks
     q_amp_h = signal_h_np[q_peak_idx_h]
@@ -101,7 +101,7 @@ def process_subject(subject_dir, col_d, col_m, col_p):
     """
     Processes all heartbeat CSVs for a single subject to calculate and save the mean cardiac axis.
     """
-    source_data_path = os.path.join(subject_dir, "moving_ave_datasets")
+    source_data_path = os.path.join(subject_dir, "0", "moving_ave_datasets")
     if not os.path.isdir(source_data_path):
         print(f"Error: 'moving_ave_datasets' directory not found in {subject_dir}")
         return
@@ -156,19 +156,28 @@ def process_subject(subject_dir, col_d, col_m, col_p):
         # Calculate axis using the new amplitude method
         axis_amplitude = calculate_axis_with_re_peaking(signal_h, signal_v)
 
-        # --- Save the result to a summary file ---
-        summary_filepath = os.path.join(output_dir, "cardiac_axis_summary.txt")
-        with open(summary_filepath, "w") as f:
-            f.write(f"# Cardiac Axis Calculation Summary\n")
-            f.write(f"Subject: {subject_name}\n")
-            f.write(f"Number of beats averaged: {len(all_beats)}\n")
-            f.write(
-                f"Calculated cardiac axis (amplitude-based): {axis_amplitude:.2f} degrees\n"
-            )
+        # --- Save the results ---
 
-        print(
-            f"Finished processing for {subject_name}. Summary saved in {summary_filepath}"
+        # 1. Save the calculated axis to a CSV file
+        subject_short_name = subject_name.split("_")[0]
+        axis_df = pd.DataFrame(
+            {
+                "subject": [subject_short_name],
+                "cardiac_axis_degrees": [axis_amplitude],
+            }
         )
+        axis_csv_path = os.path.join(
+            output_dir, f"{subject_short_name}_cardiac_axis.csv"
+        )
+        axis_df.to_csv(axis_csv_path, index=False, float_format="%.2f")
+        print(f"Cardiac axis saved to {axis_csv_path}")
+
+        # 2. Save the mean waveform data to a CSV file
+        mean_waveform_csv_path = os.path.join(output_dir, "mean_waveform.csv")
+        mean_waveform_df.to_csv(mean_waveform_csv_path, index=False)
+        print(f"Mean waveform saved to {mean_waveform_csv_path}")
+
+        print(f"Finished processing for {subject_name}.")
 
     except Exception as e:
         print(f"Could not process subject {subject_name}. Error: {e}")
@@ -185,11 +194,12 @@ def main():
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
+    print(project_root)
 
     parser.add_argument(
         "--subject_dir",
         type=str,
-        default="data/processed/15ch_arrange_direction/asano_0714_0.8s",
+        default="data/processed/15ch_arrange_direction/asano_0714_0.8s/15ch_diff_from_ch_1",
         help="Path to the subject's data directory, relative to the project root.",
     )
 
@@ -215,16 +225,12 @@ def main():
     )
 
     args = parser.parse_args()
-
     # Construct the full, absolute path for subject_dir from the project root.
-
     # This resolves issues with relative paths like '../../' and makes execution location independent.
-
     full_subject_path = os.path.join(project_root, args.subject_dir)
-
+    print(full_subject_path)
     process_subject(full_subject_path, args.col_d, args.col_m, args.col_p)
 
 
 if __name__ == "__main__":
-
     main()
