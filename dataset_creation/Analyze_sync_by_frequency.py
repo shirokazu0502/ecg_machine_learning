@@ -3375,10 +3375,9 @@ def delineate_averaged_heartbeats(moving_ave_dir, sampling_rate=500):
     print(f"Finished delineating and saved {num_heartbeats} peak files.")
 
 
-def create_15ch_variations(args):
+def create_15ch_variations(source_dir, sampling_rate):
     print("--- Starting creation of 15-channel differential dataset variations ---")
     base_ch_nums = [1, 4, 13, 16]
-    source_dir = os.path.join(args.dataset_output_path, args.output_filepath)
 
     channel_map = {
         "ch_1": [
@@ -3513,242 +3512,128 @@ def create_15ch_variations(args):
             calculate_moving_average(newly_created_files, moving_ave_path, group_size=5)
 
             # Delineate PQRST waves for the averaged heartbeats
-            delineate_averaged_heartbeats(moving_ave_path, sampling_rate=RATE)
+            delineate_averaged_heartbeats(moving_ave_path, sampling_rate=sampling_rate)
 
     print("--- Finished creating 15-channel differential dataset variations ---")
 
 
 def main(args):
-    # TARGET_CHANNEL_16ch=args.TARGET_CHANNEL_16ch
     TARGET_CHANNEL_12CH = args.TARGET_CHANNEL_12CH
     cut_min_max_range = args.cut_min_max_range
     dir_path = args.raw_datas_dir
-    csv_reader_16ch = CSVReader_16ch(dir_path)
-    df_16ch = csv_reader_16ch.process_files()
-    print(df_16ch)
-    cols = df_16ch.columns
-
+    
+    # --- 12chデータの前処理 ---
     csv_reader_12ch = CSVReader_12ch(dir_path)
     df_12ch = csv_reader_12ch.process_files()
-    # 500Hzでリサンプリング
     df_12ch = linear_interpolation_resample_All(
         df=df_12ch.copy(), sampling_rate=500, new_sampling_rate=RATE
     )
     df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
-    # 同期用インデックスファイルを読み込みと書き込み
-    handler = AutoIntegerFileHandler(dir_path + "/同期インデックス_nkmodule.txt")
+    sc_12ch = peak_sc(df_12ch_cleaned.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
 
-    if handler.check_file() == False:  # 同期するためのファイルが存在していないとき。
-        reverse = args.reverse
-        print("TARGET_CHANNEL_16chは")
-        TARGET_CHANNEL_16ch = "ch_1"
-        sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-        peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-        print("reverse=={}".format(reverse))
+    # --- 16chデータの読み込み ---
+    csv_reader_16ch = CSVReader_16ch(dir_path)
+    df_16ch = csv_reader_16ch.process_files()
+
+    # --- MSE結果記録用のリスト ---
+    mse_results = []
+    
+    # --- 周波数ループ ---
+    rate_candidates = np.arange(121.2, 122.6, 0.01)
+    
+    base_output_path = args.dataset_output_path
+    base_output_filepath = args.output_filepath
+
+    for rate_candidate in rate_candidates:
+        print(f"\n--- Processing for frequency: {rate_candidate:.2f} Hz ---")
         
-        min_combined_score = float("inf")
-        score_weight = 0.0 # MSEと最終ピーク時間差の重み
-
-        rate_candidates = np.arange(
-            121.2, 122.6, 0.01
-        )  # 例: 121.2Hz～122.6Hzを0.01Hz刻み
-        for rate_candidate in rate_candidates:
-            df_resample_16ch = ecg_clean_df_16ch(
-                df_16ch=df_16ch.copy(), rate=rate_candidate
-            )
-            df_resample_16ch = linear_interpolation_resample_All(
-                df=df_resample_16ch.copy(),
-                sampling_rate=rate_candidate,
-                new_sampling_rate=RATE,
-            )
-            if reverse == "off":
-                sc_16ch = peak_sc_16ch(
-                    df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
-                )
-            else:
-                df_16ch_reverse = df_resample_16ch.copy()
-                df_16ch_reverse[TARGET_CHANNEL_16ch] = (-1) * df_resample_16ch.copy()[
-                    TARGET_CHANNEL_16ch
-                ]
-                df_resample_16ch = df_16ch_reverse.copy()
-                sc_16ch = peak_sc_16ch(
-                    df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
-                )
-
-            comparator = ArrayComparator(
-                sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
-            )
-            cut_time, mse, final_peak_diff = comparator.find_best_cut_time()
-            
-            # 新しい評価指標（総合スコア）を計算
-            combined_score = mse + score_weight * final_peak_diff
-
-            if combined_score < min_combined_score:
-                min_combined_score = combined_score
-                best_rate = rate_candidate
-                best_cut_time = cut_time
-                best_df_resample_16ch = df_resample_16ch.copy()
-
-        df_resample_16ch = best_df_resample_16ch.copy()
-        print(f"Best Combined Score: {min_combined_score}")
-        print(f"Best Rate: {best_rate}, Best Cut Time: {best_cut_time}")
+        # --- この周波数用の出力ディレクトリを設定 ---
+        freq_dir_name = f"freq_{rate_candidate:.2f}"
+        # 注意: args.output_filepath はループ内で上書きせず、新しい変数を使う
+        current_output_filepath = os.path.join(base_output_filepath, freq_dir_name)
         
-        peak_sc_plot(df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
-        comparator.peak_diff_plot_move(best_cut_time)
-        Plot_16ch_pf = MultiPlotter(df_resample_16ch, RATE=RATE)
-        Plot_16ch_pf.multi_plot(xmin=0, xmax=100, ylim=0)
-        Plot_16ch_pf.multi_plot_16ch_with_sc(xmin=0, xmax=20, ylim=0, sc=sc_16ch)
-        plt.close()
-        print(int(best_cut_time * RATE))
-        
-        # 20251029 コメントアウト
-        # if input("write_to_CSV OK? y or n") == "y":
-        handler.write_integer(
-            RATE=RATE,
-            best_rate=best_rate,
-            cut_time=best_cut_time,
-            target_16ch=TARGET_CHANNEL_16ch,
-            reverse=reverse,
-            target_12ch=TARGET_CHANNEL_12CH,
-            cut_min_max_range=cut_min_max_range,
+        # --- 同期パラメータ計算 ---
+        df_resample_16ch = ecg_clean_df_16ch(
+            df_16ch=df_16ch.copy(), rate=rate_candidate
         )
-        # else:
-        #     return 0
-
-    else:  # 同期するファイルが存在しているとき。
-        # df_16ch_pf = hpf_lpf(df_16ch.copy(),HPF_fp=HPF_FP,HPF_fs=HPF_FS,LPF_fp=0,LPF_fs=0,RATE=RATE_16CH)
-        # df_16ch_pf = multi_pf(df_16ch.copy(),fp=0.2,fs=0.1)
-        # df_16ch_pf = df_16ch.copy()
-        print("ファイルが存在します。")
-        print("fafafafa")
-        df_resample_16ch = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
-        print("aaaaaaaaaaS")
         df_resample_16ch = linear_interpolation_resample_All(
-            df=df_resample_16ch.copy(), sampling_rate=RATE_16CH, new_sampling_rate=RATE
+            df=df_resample_16ch.copy(),
+            sampling_rate=rate_candidate,
+            new_sampling_rate=RATE,
+        )
+        
+        if args.reverse == "on":
+            # TARGET_CHANNEL_16chをargsから取得するように修正
+            target_ch_16 = args.TARGET_CHANNEL_16ch if hasattr(args, 'TARGET_CHANNEL_16ch') else 'ch_1'
+            df_16ch_reverse = df_resample_16ch.copy()
+            df_16ch_reverse[target_ch_16] = (-1) * df_resample_16ch.copy()[target_ch_16]
+            df_resample_16ch = df_16ch_reverse.copy()
+
+        target_ch_16 = args.TARGET_CHANNEL_16ch if hasattr(args, 'TARGET_CHANNEL_16ch') else 'ch_1'
+        sc_16ch = peak_sc_16ch(
+            df_resample_16ch.copy(), RATE=RATE, TARGET=target_ch_16
         )
 
-    syn_index, TARGET_CHANNEL_16ch, reverse, TARGET_CHANNEL_12CH = (
-        handler.read_integer()
-    )  # 同期するインデックス
-    print(syn_index)
-    # if(target_ch!=TARGET_CHANNEL_16ch):
-    #     print("target_ch!=args.TARGE_CHSNNEL_16ch")
-    #     print("target_ch"+target_ch)
-    #     return 0
-    # input("16ch_pf")
-    if DEBUG_PLOT == True:
-        if reverse == "off":
-            sc_16ch_pf = peak_sc_16ch(
-                df_resample_16ch[syn_index:].copy(),
-                RATE=RATE_16CH,
-                TARGET=TARGET_CHANNEL_16ch,
-            )
-
-        sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
-
-        Plot_16ch_pf = MultiPlotter(df_resample_16ch.copy(), RATE=RATE)
-
-        Plot_12ch = MultiPlotter_both(
-            df12=df_12ch_cleaned,
-            df15=df_resample_16ch[syn_index:].copy(),
-            RATE12=RATE_12ch,
-            RATE15=RATE,
-        )  # cleanされた12chにする。
-        Plot_12ch.multi_plot_12ch_16ch_with_sc_2(
-            xmin=0,
-            xmax=5,
-            ylim=0,
-            sc=sc_12ch,
-            ch=TARGET_CHANNEL_16ch,
-            png_path=args.png_path + "12chsc",
+        comparator = ArrayComparator(
+            sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
         )
-        # plt.show()
-        plt.close()
-        # input()
+        # find_best_cut_timeはmseのみ返すように戻す（あるいは不要な値は無視する）
+        cut_time, mse, _ = comparator.find_best_cut_time()
 
-    # print(df_12ch)
-    print(syn_index)
-    print(df_resample_16ch)
+        # --- MSEを記録 ---
+        mse_results.append({'frequency': rate_candidate, 'mse': mse, 'cut_time': cut_time})
 
-    # df_syn_resample_16ch=df_resample_16ch[syn_index:].copy()
-    df_syn_resample_16ch = df_resample_16ch[syn_index:].copy().reset_index(drop=True)
-    # print(df_resample_16ch)
-    # df_syn_resample_16ch=linear_interpolation_resample_All(df=df_syn_16ch,sampling_rate=RATE_16CH,new_sampling_rate=RATE)
-    df_syn_resample_16ch_24s = df_syn_resample_16ch[: TIME * RATE]
-    print(df_syn_resample_16ch_24s)
-    # plt.plot(df_syn_resample_16ch_24s["ch_1"])
-    # plt.plot(df_12ch_cleaned["A2"])
-    # # plt.show()
+        # --- データセット作成処理 ---
+        syn_index = int(cut_time * RATE)
+        df_syn_resample_16ch = df_resample_16ch[syn_index:].copy().reset_index(drop=True)
+        df_syn_resample_16ch_24s = df_syn_resample_16ch[: TIME * RATE]
 
-    # 12chと16chのそれぞれを正規化
-    df_12ch_cleaned = normalize_data(df_12ch_cleaned)
-    df_syn_resample_16ch_24s = normalize_data(df_syn_resample_16ch_24s)
+        df_12ch_cleaned_norm = normalize_data(df_12ch_cleaned)
+        df_syn_resample_16ch_24s_norm = normalize_data(df_syn_resample_16ch_24s)
 
-    con_data = pd.concat(
-        [df_syn_resample_16ch_24s, df_12ch_cleaned], axis=1
-    )  # df_12ch_cleanedを用いる。
-    con_data_dir = args.dataset_output_path + "/" + args.output_filepath
-    # con_data_dir="Dataset/pqrst_nkmodule_since{}_{}/".format(DATASET_MADE_DATE,args.peak_method)+args.output_filepath
-    # con_data_dir="Dataset/pqrst_nkmodule_since{}_{}/".format(DATASET_MADE_DATE,args.peak_method)+args.output_filepath
-    create_directory_if_not_exists(con_data_dir)
+        con_data = pd.concat([df_syn_resample_16ch_24s_norm, df_12ch_cleaned_norm], axis=1)
+        
+        # con_data_dir は cut_output_path と同じになるはず
+        cut_output_path = os.path.join(base_output_path, current_output_filepath)
+        create_directory_if_not_exists(cut_output_path)
+        con_data.to_csv(os.path.join(cut_output_path, "condata_24s.csv"), index=None)
 
-    con_data.to_csv(con_data_dir + "/condata_24s.csv", index=None)
+        ecg_A2_np = con_data["A2"].to_numpy().T
+        
+        prt_eles = PTwave_search3(
+            df_12ch,
+            ecg_A2=ecg_A2_np,
+            header="A2",
+            sampling_rate=500,
+            args=args,
+            time_length=args.time_range,
+            method=args.peak_method,
+        )
+        
+        heartbeat_cutter_prt = HeartbeatCutter_prt(
+            con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
+        )
+        
+        heartbeat_cutter_prt.cut_heartbeats(
+            file_path=cut_output_path,
+            ch=target_ch_16,
+            cut_min_max_range=cut_min_max_range,
+            args=args,
+        )
 
-    ecg_A2 = con_data["A2"]
-    print(ecg_A2)
-    ecg_A2_np = ecg_A2.to_numpy().T
-    # return 0
-    # prt_eles=PTwave_search(ecg_A2=ecg_A2_np,header="A2",sampling_rate=RATE,args=args,time_length=0.7)
-    prt_eles = PTwave_search3(
-        df_12ch,
-        ecg_A2=ecg_A2_np,
-        header="A2",
-        sampling_rate=500,
-        args=args,
-        time_length=args.time_range,
-        method=args.peak_method,
-    )  # 1213からPQRST全部検出できるcwt方を使う。
-    heartbeat_cutter_prt = HeartbeatCutter_prt(
-        con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
-    )  # 切り出す秒数を指定する。
-    print(prt_eles)
-    heartbeat_cutter_prt.cut_heartbeats(
-        file_path=args.dataset_output_path + "/" + args.output_filepath,
-        ch=TARGET_CHANNEL_16ch,
-        cut_min_max_range=cut_min_max_range,
-        args=args,
-    )
-    # heartbeat_cutter_prt.cut_heartbeats(file_path="Dataset/pqrst_nkmodule_since{}_{}/".format(DATASET_MADE_DATE,args.peak_method)+args.output_filepath,ch=TARGET_CHANNEL_16ch,cut_min_max_range=cut_min_max_range,args=args)
+        data_paths = sorted(glob(os.path.join(cut_output_path, "dataset_*.csv")))
+        moving_ave_path = os.path.join(cut_output_path, "moving_ave_datasets")
+        create_directory_if_not_exists(moving_ave_path)
+        calculate_moving_average(data_paths, moving_ave_path, group_size=5)
 
-    con_data_np = con_data.to_numpy().T
-    headers = con_data.columns
+        # 修正した関数呼び出し
+        create_15ch_variations(cut_output_path, RATE)
 
-    print(headers)
-    print(con_data_np.shape)
-    print(con_data_dir)
-
-    # 移動平均を計算
-    # 処理するCSVファイルの一覧を取得
-    data_paths = sorted(
-        glob(args.dataset_output_path + "/" + args.output_filepath + "/dataset_*.csv")
-    )
-    # pt_array_paths = sorted(
-    #     glob(
-    #         args.dataset_output_path
-    #         + "/"
-    #         + args.output_filepath
-    #         + "/ponset_toffset_*.csv"
-    #     )
-    # )
-    # pt_extend(data_paths, pt_array_paths)
-    moving_ave_path = (
-        args.dataset_output_path + "/" + args.output_filepath + "/moving_ave_datasets"
-    )
-    create_directory_if_not_exists(moving_ave_path)
-    calculate_moving_average(data_paths, moving_ave_path, group_size=5)
-
-    # Create 15-channel variations
-    create_15ch_variations(args)
+    # --- ループ終了後、MSEの結果をCSVに保存 ---
+    mse_df = pd.DataFrame(mse_results)
+    mse_csv_path = os.path.join(base_output_path, base_output_filepath, "mse_by_frequency.csv")
+    mse_df.to_csv(mse_csv_path, index=False, float_format='%.6f')
+    print(f"\n--- MSE results saved to {mse_csv_path} ---")
 
 
 if __name__ == "__main__":
