@@ -580,7 +580,6 @@ class ArrayComparator:
         cut_min_max_range = self.cut_min_max_range
         min_mse = float("inf")  # 初期値として最大値を設定
         best_index = 0
-        final_peak_diff = float("inf")
         # target=-15#後ろから3つを基準に平均二乗誤差でマッチするインデックスを探す。
         time1, time2, diff_12ch, diff_16ch = self.cul_diff()
         # target=-len(diff_12ch)
@@ -604,20 +603,23 @@ class ArrayComparator:
             if mse < min_mse:
                 min_mse = mse
                 best_index = i
-        
-        # 最終ピークの時間差を計算
-        # time1は12chのピーク時刻、time2は16chのピーク時刻
-        # small_sizeはdiff_12chの長さ = 12chのピーク数 - 1
-        # best_indexは16ch側の最適な開始インデックス
-        last_peak_12ch_time = self.sc_12ch[0].iloc[-1]
-        last_peak_16ch_time = self.sc_16ch[0].iloc[best_index + small_size]
-        final_peak_diff = abs(last_peak_12ch_time - last_peak_16ch_time)
-
+                # # 最終ピークのスタートとの時間差分を記録
+                # final_diff = abs(
+                #     (time1[target + small_size - 1] - time1[target])
+                #     - (time2[best_index + small_size - 1] - time2[best_index])
+                # )
+                # print(time1, time2, best_index, target, small_size)
+                # print(
+                #     final_diff,
+                #     time1[target + small_size - 1],
+                #     time2[best_index + small_size - 1],
+                # )
+                # time.sleep(100)
         print("12chの最初のピークのtime={}".format(time1[target]))
         print("16chの対応するピークのtime={}".format(time2[best_index]))
         cut_time = time2[best_index] - time1[target]
         print("差分={}".format(cut_time))
-        return cut_time, min_mse, final_peak_diff
+        return cut_time, min_mse
 
     # def find_best_cut_time(self):
     #     cut_min_max_range = self.cut_min_max_range
@@ -2037,6 +2039,13 @@ class HeartbeatCutter_prt:
                 # 4. 結果をデータフレームに格納
                 data[column] = corrected_signal
 
+            try:
+                data = align_peaks_per_channel(
+                    data, target_idx=150, sampling_rate=RATE
+                )  # ここで各チャネルを目標インデックス150に揃える処理を追加
+            except Exception as e:
+                print("align_peaks_per_channel エラー:", e)
+
             print("{}番目の心拍切り出し".format(i + 1))
             # print(data)
             file_name = "dataset_{}.csv".format(str(i).zfill(3))
@@ -3228,6 +3237,40 @@ def shift_with_edge(signal: np.ndarray, shift: int) -> np.ndarray:
         return padded[-shift : -shift + N]  # -shift is positive here
 
 
+def align_peaks_per_channel(
+    df_window: pd.DataFrame, target_idx: int = 150, sampling_rate: int = 500
+) -> pd.DataFrame:
+    """
+    df_window: 1心拍分（長さ400）のDataFrame（16ch と 12ch が混在している場合あり）
+    target_idx: 目標インデックス（0始まり）
+    16chチャネル名は 'ch_' で始まる列を想定。整数シフト、境界は edge 複製。
+    """
+    df_out = df_window.copy()
+    for col in df_out.columns:
+        if not str(col).startswith("ch_"):
+            continue
+        sig = df_out[col].to_numpy().astype(float)
+        # neurokitで検出を試みる（clean済みの信号想定）
+        r_idx = None
+        try:
+            _, rdict = nk.ecg_peaks(sig, sampling_rate=sampling_rate)
+            rpeaks = rdict.get("ECG_R_Peaks", [])
+            # rpeaks が list/array であればターゲットに最も近いものを選択
+            if rpeaks is not None and len(rpeaks) > 0:
+                # rpeaks may be boolean array or indices; coerce to numpy int list
+                rpeaks_idx = np.array(rpeaks, dtype=int)
+                # pick closest to target_idx
+                r_idx = int(rpeaks_idx[np.argmin(np.abs(rpeaks_idx - target_idx))])
+        except Exception:
+            r_idx = None
+        if r_idx is None:
+            # fallback: 絶対値最大の位置を使用
+            r_idx = int(np.argmax(np.abs(sig)))
+        shift = int(target_idx - r_idx)
+        df_out[col] = shift_with_edge(sig, shift)
+    return df_out
+
+
 def calculate_moving_average(csv_files, moving_ave_path, group_size=5):
     print(csv_files)
     print(moving_ave_path)
@@ -3250,274 +3293,6 @@ def calculate_moving_average(csv_files, moving_ave_path, group_size=5):
         print(f"Processed and saved: {output_path}")
 
 
-def delineate_averaged_heartbeats(moving_ave_dir, sampling_rate=500):
-    print(f"Delineating PQRST waves for averaged heartbeats in {moving_ave_dir}")
-
-    # 1. averaged datasetファイルを読み込み、連結して一本の長い信号を作成
-    ave_files = sorted(glob(os.path.join(moving_ave_dir, "dataset_*.csv")))
-    if not ave_files:
-        print("No averaged files found to delineate.")
-        return
-
-    all_signals = []
-    heartbeat_length = 0
-    for file_path in ave_files:
-        df = pd.read_csv(file_path)
-        # 'A2'チャネルを基準信号として使用
-        if "A2" in df.columns:
-            signal_segment = df["A2"].to_numpy()
-            if heartbeat_length == 0:
-                heartbeat_length = len(signal_segment)
-            all_signals.append(signal_segment)
-
-    if not all_signals or heartbeat_length == 0:
-        print("No valid 'A2' signal found in averaged files.")
-        return
-
-    continuous_signal = np.concatenate(all_signals)
-
-    # 2. 連結した長い信号に対してdelineateを実行
-    try:
-        cleaned_signal = nk.ecg_clean(
-            continuous_signal, sampling_rate=sampling_rate, method="neurokit"
-        )
-        _, rpeaks = nk.ecg_peaks(cleaned_signal, sampling_rate=sampling_rate)
-        _, waves_peak_dict = nk.ecg_delineate(
-            cleaned_signal,
-            rpeaks["ECG_R_Peaks"],
-            sampling_rate=sampling_rate,
-            method="peak",
-        )
-    except Exception as e:
-        print(f"Error during delineation of the concatenated signal: {e}")
-        return
-
-    # 3. 検出されたピーク情報を心拍ごとに分割して保存
-    num_heartbeats = len(all_signals)
-    for i in range(num_heartbeats):
-        start_idx = i * heartbeat_length
-        end_idx = (i + 1) * heartbeat_length
-
-        beat_peaks = {}
-        for key, all_peaks in waves_peak_dict.items():
-            if all_peaks is None:
-                continue
-            valid_peaks = np.array(all_peaks)[~np.isnan(all_peaks)].astype(int)
-            peaks_in_beat = valid_peaks[
-                (valid_peaks >= start_idx) & (valid_peaks < end_idx)
-            ]
-            local_peaks = peaks_in_beat - start_idx
-            beat_peaks[key] = local_peaks
-
-        # `ponset_toffset.csv`と同様の形式で保存
-        # 元の`output_csv_eles`を参考にデータフレームを作成
-        p_onset = (
-            beat_peaks.get("ECG_P_Onsets", [None])[0]
-            if len(beat_peaks.get("ECG_P_Onsets", [])) > 0
-            else None
-        )
-        t_offset = (
-            beat_peaks.get("ECG_T_Offsets", [None])[0]
-            if len(beat_peaks.get("ECG_T_Offsets", [])) > 0
-            else None
-        )
-        p_offset = (
-            beat_peaks.get("ECG_P_Offsets", [None])[0]
-            if len(beat_peaks.get("ECG_P_Offsets", [])) > 0
-            else None
-        )
-        t_onset = (
-            beat_peaks.get("ECG_T_Onsets", [None])[0]
-            if len(beat_peaks.get("ECG_T_Onsets", [])) > 0
-            else None
-        )
-        r_peak = (
-            beat_peaks.get("ECG_R_Peaks", [None])[0]
-            if len(beat_peaks.get("ECG_R_Peaks", [])) > 0
-            else None
-        )
-        p_peak = (
-            beat_peaks.get("ECG_P_Peaks", [None])[0]
-            if len(beat_peaks.get("ECG_P_Peaks", [])) > 0
-            else None
-        )
-        q_peak = (
-            beat_peaks.get("ECG_Q_Peaks", [None])[0]
-            if len(beat_peaks.get("ECG_Q_Peaks", [])) > 0
-            else None
-        )
-        s_peak = (
-            beat_peaks.get("ECG_S_Peaks", [None])[0]
-            if len(beat_peaks.get("ECG_S_Peaks", [])) > 0
-            else None
-        )
-        t_peak = (
-            beat_peaks.get("ECG_T_Peaks", [None])[0]
-            if len(beat_peaks.get("ECG_T_Peaks", [])) > 0
-            else None
-        )
-
-        data_to_save = {
-            "p_onset": [p_onset],
-            "t_offset": [t_offset],
-            "p_offset": [p_offset],
-            "t_onset": [t_onset],
-            "r_peak": [r_peak],
-            "p_peak": [p_peak],
-            "q_peak": [q_peak],
-            "s_peak": [s_peak],
-            "t_peak": [t_peak],
-        }
-        df_out = pd.DataFrame(data_to_save)
-        out_filename = os.path.join(moving_ave_dir, f"ponset_toffset_{i:03d}.csv")
-        df_out.to_csv(out_filename, index=False)
-
-    print(f"Finished delineating and saved {num_heartbeats} peak files.")
-
-
-def create_15ch_variations(args):
-    print("--- Starting creation of 15-channel differential dataset variations ---")
-    base_ch_nums = [1, 4, 13, 16]
-    source_dir = os.path.join(args.dataset_output_path, args.output_filepath)
-
-    channel_map = {
-        "ch_1": [
-            "ch_2",
-            "ch_3",
-            "ch_4",
-            "ch_5",
-            "ch_6",
-            "ch_7",
-            "ch_8",
-            "ch_9",
-            "ch_10",
-            "ch_11",
-            "ch_12",
-            "ch_13",
-            "ch_14",
-            "ch_15",
-            "ch_16",
-        ],
-        "ch_4": [
-            "ch_8",
-            "ch_12",
-            "ch_16",
-            "ch_3",
-            "ch_7",
-            "ch_11",
-            "ch_15",
-            "ch_2",
-            "ch_6",
-            "ch_10",
-            "ch_14",
-            "ch_1",
-            "ch_5",
-            "ch_9",
-            "ch_13",
-        ],
-        "ch_13": [
-            "ch_9",
-            "ch_5",
-            "ch_1",
-            "ch_14",
-            "ch_10",
-            "ch_6",
-            "ch_2",
-            "ch_15",
-            "ch_11",
-            "ch_7",
-            "ch_3",
-            "ch_16",
-            "ch_12",
-            "ch_8",
-            "ch_4",
-        ],
-        "ch_16": [
-            "ch_15",
-            "ch_14",
-            "ch_13",
-            "ch_12",
-            "ch_11",
-            "ch_10",
-            "ch_9",
-            "ch_8",
-            "ch_7",
-            "ch_6",
-            "ch_5",
-            "ch_4",
-            "ch_3",
-            "ch_2",
-            "ch_1",
-        ],
-    }
-
-    source_files = sorted(glob(os.path.join(source_dir, "dataset_*.csv")))
-
-    if not source_files:
-        print(f"No source dataset files found in {source_dir}. Aborting 15ch creation.")
-        return
-
-    for base_ch_num in base_ch_nums:
-        base_ch_name = f"ch_{base_ch_num}"
-        target_dir_name = f"15ch_diff_from_{base_ch_name}"
-        target_dir = os.path.join(os.path.dirname(source_dir), target_dir_name)
-        create_directory_if_not_exists(target_dir)
-        print(
-            f"Creating differential dataset from base {base_ch_name}, outputting to {target_dir}"
-        )
-
-        other_channels = channel_map[base_ch_name]
-
-        for file_path in source_files:
-            try:
-                df = pd.read_csv(file_path)
-
-                if base_ch_name not in df.columns or not all(
-                    c in df.columns for c in other_channels
-                ):
-                    print(
-                        f"Skipping {file_path}: missing one or more required channels."
-                    )
-                    continue
-
-                time_col = ["Time"] if "Time" in df.columns else []
-                medical_ecg_cols = [
-                    col
-                    for col in df.columns
-                    if not col.startswith("ch_") and col != "Time"
-                ]
-                base_series = df[base_ch_name]
-                other_df = df[other_channels]
-
-                diff_df = other_df.subtract(base_series, axis=0)
-
-                final_df = pd.concat(
-                    [df[time_col], diff_df, df[medical_ecg_cols]], axis=1
-                )
-
-                file_name = os.path.basename(file_path)
-                new_file_path = os.path.join(target_dir, file_name)
-                final_df.to_csv(new_file_path, index=False)
-
-            except Exception as e:
-                print(
-                    f"Error processing file {file_path} for base_ch {base_ch_name}: {e}"
-                )
-
-        # Calculate moving average for the newly created 15ch dataset
-        newly_created_files = sorted(glob(os.path.join(target_dir, "dataset_*.csv")))
-        if newly_created_files:
-            moving_ave_path = os.path.join(target_dir, "moving_ave_datasets")
-            create_directory_if_not_exists(moving_ave_path)
-            print(f"Calculating moving average for {target_dir_name}...")
-            calculate_moving_average(newly_created_files, moving_ave_path, group_size=5)
-
-            # Delineate PQRST waves for the averaged heartbeats
-            delineate_averaged_heartbeats(moving_ave_path, sampling_rate=RATE)
-
-    print("--- Finished creating 15-channel differential dataset variations ---")
-
-
 def main(args):
     # TARGET_CHANNEL_16ch=args.TARGET_CHANNEL_16ch
     TARGET_CHANNEL_12CH = args.TARGET_CHANNEL_12CH
@@ -3535,27 +3310,25 @@ def main(args):
         df=df_12ch.copy(), sampling_rate=500, new_sampling_rate=RATE
     )
     df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
+    # input("")
     # 同期用インデックスファイルを読み込みと書き込み
     handler = AutoIntegerFileHandler(dir_path + "/同期インデックス_nkmodule.txt")
 
     if handler.check_file() == False:  # 同期するためのファイルが存在していないとき。
         reverse = args.reverse
-        print("TARGET_CHANNEL_16chは")
+        print("TARGET_CHNNEL_16chは")
         TARGET_CHANNEL_16ch = "ch_1"
         sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
         peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
         print("reverse=={}".format(reverse))
-        
-        min_combined_score = float("inf")
-        score_weight = 0.1 # MSEと最終ピーク時間差の重み
+        # peak_sc_plot(df_16ch_pf.copy(),RATE=RATE_16CH,TARGET=TARGET_CHANNEL_16ch)
+        min_mse = float("inf")
 
         rate_candidates = np.arange(
             121.2, 122.6, 0.01
-        )  # 例: 121.2Hz～122.6Hzを0.01Hz刻み
+        )  # 例: 121.5Hz～122.7Hzを0.1Hz刻み
         for rate_candidate in rate_candidates:
-            df_resample_16ch = ecg_clean_df_16ch(
-                df_16ch=df_16ch.copy(), rate=rate_candidate
-            )
+            df_resample_16ch = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16CH)
             df_resample_16ch = linear_interpolation_resample_All(
                 df=df_resample_16ch.copy(),
                 sampling_rate=rate_candidate,
@@ -3565,42 +3338,41 @@ def main(args):
                 sc_16ch = peak_sc_16ch(
                     df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
                 )
+                # peak_sc_plot(df_16ch_pf.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
             else:
                 df_16ch_reverse = df_resample_16ch.copy()
                 df_16ch_reverse[TARGET_CHANNEL_16ch] = (-1) * df_resample_16ch.copy()[
                     TARGET_CHANNEL_16ch
                 ]
+                # reverseを採用
                 df_resample_16ch = df_16ch_reverse.copy()
                 sc_16ch = peak_sc_16ch(
                     df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
                 )
+                # peak_sc_plot(
+                #     df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+                # )
 
             comparator = ArrayComparator(
                 sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
             )
-            cut_time, mse, final_peak_diff = comparator.find_best_cut_time()
-            
-            # 新しい評価指標（総合スコア）を計算
-            combined_score = mse + score_weight * final_peak_diff
-
-            if combined_score < min_combined_score:
-                min_combined_score = combined_score
+            cut_time, mse = comparator.find_best_cut_time()
+            if mse < min_mse:
+                min_mse = mse
                 best_rate = rate_candidate
                 best_cut_time = cut_time
                 best_df_resample_16ch = df_resample_16ch.copy()
 
         df_resample_16ch = best_df_resample_16ch.copy()
-        print(f"Best Combined Score: {min_combined_score}")
-        print(f"Best Rate: {best_rate}, Best Cut Time: {best_cut_time}")
-        
+        print(best_cut_time, best_rate)
         peak_sc_plot(df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
         comparator.peak_diff_plot_move(best_cut_time)
         Plot_16ch_pf = MultiPlotter(df_resample_16ch, RATE=RATE)
         Plot_16ch_pf.multi_plot(xmin=0, xmax=100, ylim=0)
         Plot_16ch_pf.multi_plot_16ch_with_sc(xmin=0, xmax=20, ylim=0, sc=sc_16ch)
+        # plt.show()
         plt.close()
         print(int(best_cut_time * RATE))
-        
         # 20251029 コメントアウト
         # if input("write_to_CSV OK? y or n") == "y":
         #     handler.write_integer(
@@ -3612,6 +3384,7 @@ def main(args):
         #         target_12ch=TARGET_CHANNEL_12CH,
         #         cut_min_max_range=cut_min_max_range,
         #     )
+
         # else:
         #     return 0
 
@@ -3647,6 +3420,8 @@ def main(args):
         sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
 
         Plot_16ch_pf = MultiPlotter(df_resample_16ch.copy(), RATE=RATE)
+        # Plot_16ch_pf.multi_plot(xmin=0,xmax=10,ylim=0)
+        # Plot_16ch_pf.plot_all_channels(xmin=0,xmax=8,ylim=0)
 
         Plot_12ch = MultiPlotter_both(
             df12=df_12ch_cleaned,
@@ -3747,9 +3522,6 @@ def main(args):
     create_directory_if_not_exists(moving_ave_path)
     calculate_moving_average(data_paths, moving_ave_path, group_size=5)
 
-    # Create 15-channel variations
-    create_15ch_variations(args)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -3800,7 +3572,8 @@ if __name__ == "__main__":
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.project_path='/home/cs28/share/goto/goto/ecg_project'
     # args.raw_datas_os=RAW_DATA_DIR
-
+    # args.processed_datas_os=args.project_path+'/data/processed'
+    # args.processed_datas_os=PROCESSED_DATA_DIR
     args.dataset_made_date = DATASET_MADE_DATE
     args.raw_datas_dir = RAW_DATA_DIR + "/takahashi_test/{}".format(args.dir_name)
     # args.dataset_output_path = PROCESSED_DATA_DIR + "/pqrst_nkmodule_since{}_{}".format(
