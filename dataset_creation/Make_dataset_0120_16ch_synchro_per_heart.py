@@ -450,8 +450,6 @@ def multi_pf(df, fp, fs):
         z1_mul = hpf(RATE, fp, fs, df1)
         # z1_mul=hpf(RATE,0.3,0.1,df1)
         df[column] = z1_mul
-        # print(df[column])
-        # print("")
     return df
 
 
@@ -604,7 +602,7 @@ class ArrayComparator:
             if mse < min_mse:
                 min_mse = mse
                 best_index = i
-        
+
         # 最終ピークの時間差を計算
         # time1は12chのピーク時刻、time2は16chのピーク時刻
         # small_sizeはdiff_12chの長さ = 12chのピーク数 - 1
@@ -1854,6 +1852,28 @@ def normalize_data(df):
     return normalized_df
 
 
+def shift_with_edge(signal: np.ndarray, shift: int) -> np.ndarray:
+    """
+    Shifts a 1D signal, padding with edge values.
+    - shift > 0: shifts to the right (delay)
+    - shift < 0: shifts to the left (advance)
+    """
+    N = len(signal)
+    if shift == 0:
+        return signal
+
+    shifted_signal = np.empty_like(signal)
+    if shift > 0:  # Right shift
+        shifted_signal[:shift] = signal[0]  # Pad left with start value
+        shifted_signal[shift:] = signal[:-shift]
+    else:  # Left shift
+        abs_shift = -shift
+        shifted_signal[:-abs_shift] = signal[abs_shift:]
+        shifted_signal[-abs_shift:] = signal[-1]  # Pad right with end value
+
+    return shifted_signal
+
+
 class HeartbeatCutter_prt:
     def __init__(self, con_data, time_length, prt_eles, args):
         self.con_data = con_data
@@ -1936,12 +1956,29 @@ class HeartbeatCutter_prt:
 
         pt_info = []
         for i, center_idx in enumerate(center_idxs):
-            # data = self.con_data[
-            #     center_idx - self.range : center_idx + self.range
-            # ].copy()
             start_idx = center_idx - 150
             end_idx = start_idx + 400
             data = self.con_data[start_idx:end_idx].copy()
+
+            # --- Final Time Shift Adjustment ---
+            TARGET_16CH_PEAK_INDEX = 150
+            df_16ch = data[[col for col in data.columns if col.startswith("ch_")]]
+            ref_signal_16ch = df_16ch[ch].to_numpy()
+
+            # Find R-peak in the 16ch reference signal (around the center)
+            search_range_start = TARGET_16CH_PEAK_INDEX - 50
+            search_range_end = TARGET_16CH_PEAK_INDEX + 50
+            peak_idx_16ch = search_range_start + np.argmax(
+                ref_signal_16ch[search_range_start:search_range_end]
+            )
+
+            shift_amount = TARGET_16CH_PEAK_INDEX - peak_idx_16ch
+
+            # Apply the same shift to all 16 channels
+            for col in df_16ch.columns:
+                data[col] = shift_with_edge(data[col].to_numpy(), shift_amount)
+            # ------------------------------------
+
             # インデックス振り直し
             data.reset_index(inplace=True, drop=True)
             print(center_idx, p_indexs_onsets[i])
@@ -3545,9 +3582,9 @@ def main(args):
         sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
         peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
         print("reverse=={}".format(reverse))
-        
+
         min_combined_score = float("inf")
-        score_weight = 0.0 # MSEと最終ピーク時間差の重み
+        score_weight = 0.0  # MSEと最終ピーク時間差の重み
 
         rate_candidates = np.arange(
             121.2, 122.6, 0.01
@@ -3579,7 +3616,7 @@ def main(args):
                 sc_16ch=sc_16ch, sc_12ch=sc_12ch, cut_min_max_range=cut_min_max_range
             )
             cut_time, mse, final_peak_diff = comparator.find_best_cut_time()
-            
+
             # 新しい評価指標（総合スコア）を計算
             combined_score = mse + score_weight * final_peak_diff
 
@@ -3592,7 +3629,7 @@ def main(args):
         df_resample_16ch = best_df_resample_16ch.copy()
         print(f"Best Combined Score: {min_combined_score}")
         print(f"Best Rate: {best_rate}, Best Cut Time: {best_cut_time}")
-        
+
         peak_sc_plot(df_resample_16ch.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
         comparator.peak_diff_plot_move(best_cut_time)
         Plot_16ch_pf = MultiPlotter(df_resample_16ch, RATE=RATE)
@@ -3600,7 +3637,7 @@ def main(args):
         Plot_16ch_pf.multi_plot_16ch_with_sc(xmin=0, xmax=20, ylim=0, sc=sc_16ch)
         plt.close()
         print(int(best_cut_time * RATE))
-        
+
         # 20251029 コメントアウト
         # if input("write_to_CSV OK? y or n") == "y":
         handler.write_integer(

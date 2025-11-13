@@ -97,11 +97,41 @@ def calculate_axis_with_re_peaking(signal_h, signal_v):
     return np.degrees(angle_rad)
 
 
-def process_subject(subject_dir, col_d, col_m, col_p):
+def calculate_axis_from_12lead(signal_I, signal_aVF):
+    """Calculates cardiac axis from Lead I and aVF signals based on net QRS amplitude."""
+    # Find QRS peaks for each lead
+    q_peak_idx_I, r_peak_idx_I, s_peak_idx_I = find_qrs_peaks(signal_I)
+    q_peak_idx_aVF, r_peak_idx_aVF, s_peak_idx_aVF = find_qrs_peaks(signal_aVF)
+
+    # Ensure signals are numpy arrays for indexing
+    signal_I_np = signal_I.to_numpy() if isinstance(signal_I, pd.Series) else signal_I
+    signal_aVF_np = (
+        signal_aVF.to_numpy() if isinstance(signal_aVF, pd.Series) else signal_aVF
+    )
+
+    # Get amplitudes
+    q_amp_I = signal_I_np[q_peak_idx_I]
+    r_amp_I = signal_I_np[r_peak_idx_I]
+    s_amp_I = signal_I_np[s_peak_idx_I]
+
+    q_amp_aVF = signal_aVF_np[q_peak_idx_aVF]
+    r_amp_aVF = signal_aVF_np[r_peak_idx_aVF]
+    s_amp_aVF = signal_aVF_np[s_peak_idx_aVF]
+
+    # Calculate net QRS amplitude (R - (Q+S))
+    net_amp_I = r_amp_I + q_amp_I + s_amp_I
+    net_amp_aVF = r_amp_aVF + q_amp_aVF + s_amp_aVF
+
+    # Calculate angle using arctan2(y, x)
+    angle_rad = np.arctan2(net_amp_aVF, net_amp_I)
+    return np.degrees(angle_rad)
+
+
+def process_subject(subject_dir, col_d, col_m, col_p, col_I, col_aVF):
     """
     Processes all heartbeat CSVs for a single subject to calculate and save the mean cardiac axis.
     """
-    source_data_path = os.path.join(subject_dir, "moving_ave_datasets")
+    source_data_path = os.path.join(subject_dir, "0", "moving_ave_datasets")
     if not os.path.isdir(source_data_path):
         print(f"Error: 'moving_ave_datasets' directory not found in {subject_dir}")
         return
@@ -142,35 +172,39 @@ def process_subject(subject_dir, col_d, col_m, col_p):
 
         # --- Calculate cardiac axis from the average waveform ---
         print("Calculating cardiac axis from average waveform...")
-        # Ensure columns exist
-        for col in [col_d, col_m, col_p]:
-            if col not in mean_waveform_df.columns:
-                raise ValueError(
-                    f"Column '{col}' not found in the average waveform dataframe."
-                )
+        
+        # --- 15-channel sensor method ---
+        required_cols_15ch = [col_d, col_m, col_p]
+        if not all(col in mean_waveform_df.columns for col in required_cols_15ch):
+            raise ValueError(f"One or more columns for 15-ch axis calculation not found.")
+        
+        signal_v_15ch = mean_waveform_df[col_p] - mean_waveform_df[col_m]
+        signal_h_15ch = mean_waveform_df[col_d] - mean_waveform_df[col_p]
+        axis_15ch = calculate_axis_with_re_peaking(signal_h_15ch, signal_v_15ch)
 
-        # Define orthogonal vectors
-        signal_v = mean_waveform_df[col_p] - mean_waveform_df[col_m]
-        signal_h = mean_waveform_df[col_d] - mean_waveform_df[col_p]
+        # --- 12-lead ECG method ---
+        required_cols_12lead = [col_I, col_aVF]
+        if not all(col in mean_waveform_df.columns for col in required_cols_12lead):
+            raise ValueError(f"Columns '{col_I}' or '{col_aVF}' for 12-lead axis calculation not found.")
 
-        # Calculate axis using the new amplitude method
-        axis_amplitude = calculate_axis_with_re_peaking(signal_h, signal_v)
+        axis_12lead = calculate_axis_from_12lead(
+            mean_waveform_df[col_I], mean_waveform_df[col_aVF]
+        )
 
         # --- Save the results ---
-
-        # 1. Save the calculated axis to a CSV file
         subject_short_name = subject_name.split("_")[0]
         axis_df = pd.DataFrame(
             {
                 "subject": [subject_short_name],
-                "cardiac_axis_degrees": [axis_amplitude],
+                "cardiac_axis_15ch_degrees": [axis_15ch],
+                "cardiac_axis_12lead_degrees": [axis_12lead],
             }
         )
         axis_csv_path = os.path.join(
             output_dir, f"{subject_short_name}_cardiac_axis.csv"
         )
         axis_df.to_csv(axis_csv_path, index=False, float_format="%.2f")
-        print(f"Cardiac axis saved to {axis_csv_path}")
+        print(f"Cardiac axis comparison saved to {axis_csv_path}")
 
         # 2. Save the mean waveform data to a CSV file
         mean_waveform_csv_path = os.path.join(output_dir, "mean_waveform.csv")
@@ -184,52 +218,63 @@ def process_subject(subject_dir, col_d, col_m, col_p):
 
 
 def main():
-
     parser = argparse.ArgumentParser(
         description="Create a new dataset with cardiac axis information."
     )
 
     # The base directory is the project root. We use this to build robust paths.
-
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
-    print(project_root)
 
+    # Arguments for 15-channel sensor data
     parser.add_argument(
         "--subject_dir",
         type=str,
-        default="data/processed/15ch_arrange_direction/asano_0714_0.8s/15ch_diff_from_ch_1",
+        default="data/processed/15ch_arrange_direction/asano_0714_0.8s",
         help="Path to the subject's data directory, relative to the project root.",
     )
-
     parser.add_argument(
         "--col_d",
         type=str,
         default="ch_4",
         help="Column name for the Lower Left position (default: 'ch_4').",
     )
-
     parser.add_argument(
         "--col_m",
         type=str,
         default="ch_13",
         help="Column name for the Upper Right position (default: 'ch_13').",
     )
-
     parser.add_argument(
         "--col_p",
         type=str,
         default="ch_16",
         help="Column name for the Lower Right position (default: 'ch_16').",
     )
+    
+    # Arguments for 12-lead ECG data
+    parser.add_argument(
+        "--col_I",
+        type=str,
+        default="A1",
+        help="Column name for Lead I (default: 'A1')."
+    )
+    parser.add_argument(
+        "--col_aVF",
+        type=str,
+        default="aVF",
+        help="Column name for Lead aVF (default: 'aVF')."
+    )
 
     args = parser.parse_args()
+
     # Construct the full, absolute path for subject_dir from the project root.
-    # This resolves issues with relative paths like '../../' and makes execution location independent.
     full_subject_path = os.path.join(project_root, args.subject_dir)
-    print(full_subject_path)
-    process_subject(full_subject_path, args.col_d, args.col_m, args.col_p)
+
+    process_subject(
+        full_subject_path, args.col_d, args.col_m, args.col_p, args.col_I, args.col_aVF
+    )
 
 
 if __name__ == "__main__":
