@@ -172,21 +172,27 @@ def calculate_axis_from_12lead(signal_I, signal_aVF):
 
 
 def get_physical_sensor_coordinates(orientation="normal"):
-    """Returns the 2D coordinates for the 16 sensors based on Pattern B."""
+    """
+    Returns the 2D coordinates for the 16 sensors.
+    - 'normal': ch_1 is at the bottom-right (3,0).
+    - 'flipped': ch_1 is at the top-left (0,3).
+    """
     coords = {}
-    # Pattern B: Column-major order
-    # ch_1, ch_2, ch_3, ch_4 are in the first column
-    for i in range(16):
+    for i in range(16):  # i is 0-indexed
         if orientation == "normal":
-            col = i // 4
-            row = 3 - (i % 4)
-        elif orientation == "flipped":
+            # ch_1 is at (3,0)
             col = 3 - (i // 4)
             row = i % 4
+        elif orientation == "flipped":
+            # ch_1 is at (0,3)
+            col = i // 4
+            row = 3 - (i % 4)
         else:
             raise ValueError(
                 "Invalid orientation specified. Use 'normal' or 'flipped'."
             )
+
+        # coords key is 1-indexed
         coords[f"ch_{i+1}"] = (col, row)
     return coords
 
@@ -293,16 +299,17 @@ def main(args):
 
     # Setup paths
     subject_path = os.path.normpath(args.subject_dir)
-    subject_name_full = "noda_0714_0.8s"
+    subject_name_full = os.path.basename(subject_path)
     subject_name_short = subject_name_full.split("_")[0]
 
     # Define the new dataset directory for virtual electrodes and axis
+    output_subject_dir = f"{subject_name_full}_{args.orientation}"
     output_dataset_dir = os.path.join(
         project_root,
         "data",
         "processed",
         "virtual_electrode_dataset",
-        subject_name_full,
+        output_subject_dir,
     )
     create_directory_if_not_exists(output_dataset_dir)
 
@@ -339,7 +346,7 @@ def main(args):
 
         # --- Create virtual electrodes ---
         print("Creating 9-channel virtual electrode dataset...")
-        df_virtual_9ch, _ = create_virtual_electrodes(df_16ch)
+        df_virtual_9ch, _ = create_virtual_electrodes(df_16ch, args.orientation)
 
         # --- Save the mean virtual waveform dataset ---
         if "Time" in mean_waveform_df.columns:
@@ -406,15 +413,27 @@ def create_directory_if_not_exists(directory_path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Calculate cardiac axis using a 3x3 virtual electrode grid."
+    # Arguments are set directly for simplicity
+    class Args:
+        pass
+
+    args = Args()
+
+    # ##################################################################
+    # #############  CONFIGURATION FOR THE SCRIPT RUN  ###############
+    # ##################################################################
+    subject_name_full = "noda_0714_0.8s"
+    args.orientation = "flipped"  # <--- CHANGE THIS: "normal" or "flipped"
+    # ##################################################################
+
+    # The base directory is the project root. We use this to build robust paths.
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
-    args = parser.parse_args()
-    # Construct the full, absolute path for subject_dir from the project root.
+
     args.subject_dir = os.path.join(
-        PROCESSED_DATA_DIR, "for_best_resample", "kanda_0807_0.8s"
+        project_root, "data", "processed", "for_best_resample", subject_name_full
     )
-    args.output_dir = os.path.join(PROCESSED_DATA_DIR, "virtual_electrode_axis")
     args.col_I = "A1"
     args.col_aVF = "aVF"
     main(args)

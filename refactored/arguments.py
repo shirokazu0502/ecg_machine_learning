@@ -8,7 +8,7 @@ import datetime
 
 
 def get_args():
-    current_time = datetime.date.today().strftime("LSTM_%Y%m%d")
+    current_time = datetime.date.today().strftime("LSTM_%Y%m%d%H_after_rotation")
     datalength = int(RATE * 0.8)
 
     parser = argparse.ArgumentParser()
@@ -55,14 +55,10 @@ def get_args():
     parser.add_argument("--transform_type", type=str, default="normal")
     parser.add_argument("--current_time", type=str, default=current_time)
     parser.add_argument("--ecg_ch_num", type=int, default=8)
-    parser.add_argument(
-        "--num_channels",
-        type=int,
-        default=15,
-        help="Number of input channels for the models (e.g., 15 or 16).",
-    )
+    parser.add_argument("--num_channels", type=int, default=15)
+    parser.add_argument("--orientation", type=str, default="normal")
     parser.add_argument("--ave_data_flg", type=int, default=0)
-    parser.add_argument("--base_filters", type=int, default=128)
+    parser.add_argument("--base_filters", type=int, default=32)
     parser.add_argument("--lstm_hidden_size", type=int, default=128)
     parser.add_argument("--lstm_num_layers", type=int, default=2)
     args = parser.parse_args()

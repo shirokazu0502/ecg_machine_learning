@@ -66,7 +66,6 @@ def find_qrs_peaks(signal, r_peak_center=150, r_search_window=25, qs_search_offs
             if s_search_start < s_search_end
             else r_peak_idx
         )
-
     return q_peak_idx, r_peak_idx, s_peak_idx
 
 
@@ -127,7 +126,7 @@ def calculate_axis_from_12lead(signal_I, signal_aVF):
     return np.degrees(angle_rad)
 
 
-def process_subject(subject_dir, col_d, col_m, col_p, col_I, col_aVF):
+def process_subject(subject_dir, col_base, col_h, col_v, col_I, col_aVF):
     """
     Processes all heartbeat CSVs for a single subject to calculate and save the mean cardiac axis.
     """
@@ -152,14 +151,12 @@ def process_subject(subject_dir, col_d, col_m, col_p, col_I, col_aVF):
         return
 
     print(f"Averaging {len(files_to_process)} beats for subject: {subject_name}")
-
     try:
         # --- Load all beats and calculate the average waveform ---
         all_beats = []
         # Use the first file to get header information
         first_df = pd.read_csv(files_to_process[0])
         column_names = first_df.columns
-
         for file_path in tqdm(
             files_to_process, desc=f"Loading beats for {subject_name}"
         ):
@@ -172,21 +169,27 @@ def process_subject(subject_dir, col_d, col_m, col_p, col_I, col_aVF):
 
         # --- Calculate cardiac axis from the average waveform ---
         print("Calculating cardiac axis from average waveform...")
-        
-        # --- 15-channel sensor method ---
-        required_cols_15ch = [col_d, col_m, col_p]
+
+        # --- 15-channel sensor method (new definition) ---
+        required_cols_15ch = [col_base, col_h, col_v]
         if not all(col in mean_waveform_df.columns for col in required_cols_15ch):
-            raise ValueError(f"One or more columns for 15-ch axis calculation not found.")
-        
-        signal_v_15ch = mean_waveform_df[col_p] - mean_waveform_df[col_m]
-        signal_h_15ch = mean_waveform_df[col_d] - mean_waveform_df[col_p]
-        axis_15ch = calculate_axis_with_re_peaking(signal_h_15ch, signal_v_15ch)
+            raise ValueError(
+                f"One or more columns for 15-ch axis calculation not found."
+            )
+        signal_h = (
+            mean_waveform_df[col_h] - mean_waveform_df[col_base]
+        )  # Rightward vector
+        signal_v = (
+            mean_waveform_df[col_v] - mean_waveform_df[col_base]
+        )  # Downward vector
+        axis_15ch = calculate_axis_with_re_peaking(signal_h, signal_v)
 
         # --- 12-lead ECG method ---
         required_cols_12lead = [col_I, col_aVF]
         if not all(col in mean_waveform_df.columns for col in required_cols_12lead):
-            raise ValueError(f"Columns '{col_I}' or '{col_aVF}' for 12-lead axis calculation not found.")
-
+            raise ValueError(
+                f"Columns '{col_I}' or '{col_aVF}' for 12-lead axis calculation not found."
+            )
         axis_12lead = calculate_axis_from_12lead(
             mean_waveform_df[col_I], mean_waveform_df[col_aVF]
         )
@@ -210,9 +213,7 @@ def process_subject(subject_dir, col_d, col_m, col_p, col_I, col_aVF):
         mean_waveform_csv_path = os.path.join(output_dir, "mean_waveform.csv")
         mean_waveform_df.to_csv(mean_waveform_csv_path, index=False)
         print(f"Mean waveform saved to {mean_waveform_csv_path}")
-
         print(f"Finished processing for {subject_name}.")
-
     except Exception as e:
         print(f"Could not process subject {subject_name}. Error: {e}")
 
@@ -221,59 +222,59 @@ def main():
     parser = argparse.ArgumentParser(
         description="Create a new dataset with cardiac axis information."
     )
-
     # The base directory is the project root. We use this to build robust paths.
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
-
-    # Arguments for 15-channel sensor data
+    # Argument for the source data directory
     parser.add_argument(
         "--subject_dir",
         type=str,
         default="data/processed/15ch_arrange_direction/asano_0714_0.8s",
         help="Path to the subject's data directory, relative to the project root.",
     )
+    # Arguments for the new 15-channel vector definition
     parser.add_argument(
-        "--col_d",
+        "--col_base",
         type=str,
-        default="ch_4",
-        help="Column name for the Lower Left position (default: 'ch_4').",
+        default="ch_5",
+        help="Column name for the base/origin channel (default: 'ch_5').",
     )
     parser.add_argument(
-        "--col_m",
+        "--col_h",
         type=str,
         default="ch_13",
-        help="Column name for the Upper Right position (default: 'ch_13').",
+        help="Column name for the horizontal vector endpoint (default: 'ch_13').",
     )
     parser.add_argument(
-        "--col_p",
+        "--col_v",
         type=str,
-        default="ch_16",
-        help="Column name for the Lower Right position (default: 'ch_16').",
+        default="ch_8",
+        help="Column name for the vertical vector endpoint (default: 'ch_8').",
     )
-    
     # Arguments for 12-lead ECG data
     parser.add_argument(
         "--col_I",
         type=str,
         default="A1",
-        help="Column name for Lead I (default: 'A1')."
+        help="Column name for Lead I (default: 'A1').",
     )
     parser.add_argument(
         "--col_aVF",
         type=str,
         default="aVF",
-        help="Column name for Lead aVF (default: 'aVF')."
+        help="Column name for Lead aVF (default: 'aVF').",
     )
-
     args = parser.parse_args()
-
     # Construct the full, absolute path for subject_dir from the project root.
     full_subject_path = os.path.join(project_root, args.subject_dir)
-
     process_subject(
-        full_subject_path, args.col_d, args.col_m, args.col_p, args.col_I, args.col_aVF
+        full_subject_path,
+        args.col_base,
+        args.col_h,
+        args.col_v,
+        args.col_I,
+        args.col_aVF,
     )
 
 

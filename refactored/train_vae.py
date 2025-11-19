@@ -12,10 +12,10 @@ import datetime
 import json
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
-
+import time
 import utils
 from models import VAE
-import config
+import arguments as config
 import Dataset
 
 
@@ -324,41 +324,39 @@ def main():
 
     train_dataset_dict = {}
     test_dataset_dict = {}
+
+    if args.Dataset_name == "15ch_arrange_direction":
+        dataset_setup_fn = Dataset.Dataset_setup_8ch_pt_augmentation
+        dataset_args = {
+            "TARGET_NAME": args.TARGET_NAME,
+            "transform_type": args.transform_type,
+            "Dataset_name": args.Dataset_name,
+            "dataset_num": args.dataset_num,
+            "ave_data_flg": args.ave_data_flg,
+            "datalength": args.datalength,
+            "num_channels": args.num_channels,
+        }
+    else:
+        dataset_setup_fn = Dataset.Dataset_setup_virtual_9ch
+        dataset_args = {
+            "TARGET_NAME": args.TARGET_NAME,
+            "transform_type": args.transform_type,
+            "Dataset_name": args.Dataset_name,
+            "dataset_num": args.dataset_num,
+            "ave_data_flg": args.ave_data_flg,
+            "orientation": args.orientation,
+            "datalength": args.datalength,
+            "num_channels": args.num_channels,
+        }
+
     train_dataset_dict["P_train_dataset"], test_dataset_dict["P_test_dataset"] = (
-        Dataset.Dataset_setup_8ch_pt_augmentation(
-            TARGET_NAME=args.TARGET_NAME,
-            transform_type=args.transform_type,
-            Dataset_name=args.Dataset_name,
-            dataset_num=args.dataset_num,
-            DataAugumentation=args.p_augumentation,
-            ave_data_flg=args.ave_data_flg,
-            datalength=args.datalength,
-            num_channels=args.num_channels, # Pass num_channels
-        )
+        dataset_setup_fn(**dataset_args, DataAugumentation=args.p_augumentation)
     )
     train_dataset_dict["R_train_dataset"], test_dataset_dict["R_test_dataset"] = (
-        Dataset.Dataset_setup_8ch_pt_augmentation(
-            TARGET_NAME=args.TARGET_NAME,
-            transform_type=args.transform_type,
-            Dataset_name=args.Dataset_name,
-            dataset_num=args.dataset_num,
-            DataAugumentation=args.r_augumentation,
-            ave_data_flg=args.ave_data_flg,
-            datalength=args.datalength,
-            num_channels=args.num_channels, # Pass num_channels
-        )
+        dataset_setup_fn(**dataset_args, DataAugumentation=args.r_augumentation)
     )
     train_dataset_dict["T_train_dataset"], test_dataset_dict["T_test_dataset"] = (
-        Dataset.Dataset_setup_8ch_pt_augmentation(
-            TARGET_NAME=args.TARGET_NAME,
-            transform_type=args.transform_type,
-            Dataset_name=args.Dataset_name,
-            dataset_num=args.dataset_num,
-            DataAugumentation=args.t_augumentation,
-            ave_data_flg=args.ave_data_flg,
-            datalength=args.datalength,
-            num_channels=args.num_channels, # Pass num_channels
-        )
+        dataset_setup_fn(**dataset_args, DataAugumentation=args.t_augumentation)
     )
     all_test_dataset = test_dataset_dict["R_test_dataset"]
 
@@ -400,7 +398,7 @@ def main():
         "latent_size": args.latent_size,
         "conditional": args.conditional,
         "num_labels": 20 if args.conditional else 0,
-        "num_channels": args.num_channels, # Use num_channels arg
+        "num_channels": args.num_channels,  # Use num_channels arg
     }
     vae_dict = {
         "P": VAE(**common_kwargs).to(device),

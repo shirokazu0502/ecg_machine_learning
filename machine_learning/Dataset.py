@@ -1709,449 +1709,429 @@ def Dataset_setup_8ch_pt_augmentation(
     print(ave_path)
     print("fafafafafafa")
     # base_channels = ["ch_1_base", "ch_4_base", "ch_13_base", "ch_16_base"]
-    base_channels = ["ch_1_base", "ch_4_base", "ch_13_base", "ch_16_base"]
     for j in range(len(Train_list)):
-        for base_ch in base_channels:
-            path_to_dataset = directory_path + "/" + Train_list[j] + "/" + base_ch + "/"
-            # input(path_to_dataset)
-            for i in range(dataset_num):
-                path = (
-                    path_to_dataset
-                    + ave_path
-                    + "dataset_{}.csv".format(str(i).zfill(3))
-                )
-                pt_path = path_to_dataset + "ponset_toffset_{}.csv".format(
-                    str(i).zfill(3)
-                )
+        path_to_dataset = directory_path + "/" + Train_list[j] + "/"
+        # input(path_to_dataset)
+        for i in range(dataset_num):
+            path = path_to_dataset + ave_path + "dataset_{}.csv".format(str(i).zfill(3))
+            pt_path = (
+                path_to_dataset
+                + ave_path
+                + "ponset_toffset_{}.csv".format(str(i).zfill(3))
+            )
 
-                if not os.path.isfile(path) or not os.path.isfile(pt_path):
-                    print("no file in " + Train_list[j])
-                    print(path)
-                else:
-                    label_name = replace_slash_with_underscore(
-                        Train_list[j]
-                    ) + "_dataset{}".format(str(i).zfill(3))
-                    data = pd.read_csv(path, header=None, skiprows=1)
-                    df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
-                    pt_array = np.array(df_pt.iloc[0], dtype=int)
-                    data_ecg = data.drop(drop_col_ecg, axis=1)
-                    sh_ecg = data_ecg.shape
-                    data_ecg.columns = range(sh_ecg[1])
-                    print(data)
-                    print(path)
-                    print(drop_col_mul)
-                    print(data.columns)
+            if not os.path.isfile(path) or not os.path.isfile(pt_path):
+                print("no file in " + Train_list[j])
+                print(path)
+            else:
+                label_name = replace_slash_with_underscore(
+                    Train_list[j]
+                ) + "_dataset{}".format(str(i).zfill(3))
+                data = pd.read_csv(path, header=None, skiprows=1)
+                df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
+                pt_array = np.array(df_pt.iloc[0], dtype=int)
+                data_ecg = data.drop(drop_col_ecg, axis=1)
+                sh_ecg = data_ecg.shape
+                data_ecg.columns = range(sh_ecg[1])
+                print(data)
+                print(path)
+                print(drop_col_mul)
+                print(data.columns)
 
-                    data_mul = data.drop(drop_col_mul, axis=1)
-                    sh_mul = data_mul.shape
-                    data_mul.columns = range(sh_mul[1])
+                data_mul = data.drop(drop_col_mul, axis=1)
+                sh_mul = data_mul.shape
+                data_mul.columns = range(sh_mul[1])
 
-                    PGV_train = torch.FloatTensor(data_mul.T.values)
-                    print(PGV_train.shape)
-                    PGV_train = PGV_train.reshape(-1, 15, datalength)
-                    PGV_train = normalize_tensor_data(PGV_train)
+                PGV_train = torch.FloatTensor(data_mul.T.values)
+                print(PGV_train.shape)
+                print(PGV_train)
+                PGV_train = PGV_train.reshape(-1, 15, datalength)
+                PGV_train = normalize_tensor_data(PGV_train)
 
-                    # if(transform_type=="normal"):
-                    # PGV_train = pt_extend(PGV_train.clone(), pt_array)
-                    PGV_train_set.append(PGV_train)
-                    ECG_train = torch.FloatTensor(data_ecg.T.values)
-                    ECG_train = ECG_train.reshape(-1, ecg_ch_num, datalength)
-                    ECG_train = normalize_tensor_data(ECG_train)
-                    print("aaaaaaaaaaaaaaaa")
-                    # xx=ECG_train[0,0]
-                    # xx2=ECG_train[0,1]
-                    # yy=PGV_train[0,0]
+                # if(transform_type=="normal"):
+                # PGV_train = pt_extend(PGV_train.clone(), pt_array)
+                PGV_train_set.append(PGV_train)
+                ECG_train = torch.FloatTensor(data_ecg.T.values)
+                ECG_train = ECG_train.reshape(-1, ecg_ch_num, datalength)
+                ECG_train = normalize_tensor_data(ECG_train)
+                print("aaaaaaaaaaaaaaaa")
+                print(PGV_train)
+                # xx=ECG_train[0,0]
+                # xx2=ECG_train[0,1]
+                # yy=PGV_train[0,0]
 
-                    # peaks_ecg=nk.ecg_peaks(xx2, 500)  # R波の位置を取得
-                    # rpeaks_ecg=peaks_ecg[1]['ECG_R_Peaks']
-                    # peaks_16ch=nk.ecg_peaks(yy, 500)  # R波の位置を取得
-                    # rpeaks_16ch=peaks_16ch[1]['ECG_R_Peaks']
-                    # print(rpeaks_ecg)
-                    # print(rpeaks_16ch)
-                    # plt.plot(yy,label="16ch_ch1")
-                    # # plt.plot(xx,label="ECG_A1",color="r")
-                    # plt.plot(xx2,label="ECG_A2",color="r")
-                    # plt.scatter(rpeaks_16ch,yy[rpeaks_16ch],label="16ch_ch1_peak")
-                    # plt.scatter(rpeaks_ecg,xx2[rpeaks_ecg],label="ecg_A2_peak")
-                    # plt.legend()
-                    # plt.title(label_name+'ecgpeak={}_16chpeak={}'.format(rpeaks_ecg,rpeaks_16ch))
-                    # # plt.show()
-                    # plt.savefig(outputpeak_path+"/{}.png".format(label_name))
-                    # plt.close()
-                    # plt.cla()
+                # peaks_ecg=nk.ecg_peaks(xx2, 500)  # R波の位置を取得
+                # rpeaks_ecg=peaks_ecg[1]['ECG_R_Peaks']
+                # peaks_16ch=nk.ecg_peaks(yy, 500)  # R波の位置を取得
+                # rpeaks_16ch=peaks_16ch[1]['ECG_R_Peaks']
+                # print(rpeaks_ecg)
+                # print(rpeaks_16ch)
+                # plt.plot(yy,label="16ch_ch1")
+                # # plt.plot(xx,label="ECG_A1",color="r")
+                # plt.plot(xx2,label="ECG_A2",color="r")
+                # plt.scatter(rpeaks_16ch,yy[rpeaks_16ch],label="16ch_ch1_peak")
+                # plt.scatter(rpeaks_ecg,xx2[rpeaks_ecg],label="ecg_A2_peak")
+                # plt.legend()
+                # plt.title(label_name+'ecgpeak={}_16chpeak={}'.format(rpeaks_ecg,rpeaks_16ch))
+                # # plt.show()
+                # plt.savefig(outputpeak_path+"/{}.png".format(label_name))
+                # plt.close()
+                # plt.cla()
 
-                    # input("")
-                    # if transform_type == "normal":
-                    # ECG_train = pt_extend(ECG_train.clone(), pt_array)
-                    ECG_train_set.append(ECG_train)
-                    label_train_set.append(label_name)
-                    pt_train_set.append(pt_array)
+                # input("")
+                # if transform_type == "normal":
+                # ECG_train = pt_extend(ECG_train.clone(), pt_array)
+                ECG_train_set.append(ECG_train)
+                label_train_set.append(label_name)
+                pt_train_set.append(pt_array)
 
-                    if (
-                        DataAugumentation == "rt_and_height"
-                        or DataAugumentation == "st_and_height"
-                    ):  # T波の高さを変えるデータ拡張
-                        r_offset = 230  #
-                        t_offset = pt_array[1]
-                        t_onset = pt_array[3]
-                        extend_t_height_rates = [
-                            0.5,
-                            0.6,
-                            0.7,
-                            0.8,
-                            0.9,
-                            1.1,
-                            1.2,
-                            1.3,
-                            1.4,
-                            1.5,
-                        ]
-                        for l in range(len(extend_t_height_rates)):
-                            # check_value=(datalength-t_offset)/(t_onset-r_offset)#ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                if (
+                    DataAugumentation == "rt_and_height"
+                    or DataAugumentation == "st_and_height"
+                ):  # T波の高さを変えるデータ拡張
+                    r_offset = 230  #
+                    t_offset = pt_array[1]
+                    t_onset = pt_array[3]
+                    extend_t_height_rates = [
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.1,
+                        1.2,
+                        1.3,
+                        1.4,
+                        1.5,
+                    ]
+                    for l in range(len(extend_t_height_rates)):
+                        # check_value=(datalength-t_offset)/(t_onset-r_offset)#ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        (
+                            ECG_train_augment_data,
+                            PGV_train_augment_data,
+                            label_name_augment,
+                            pt_array_augument,
+                        ) = make_t_height_extation(
+                            PGV_train[0],
+                            ECG_train[0],
+                            pt_array,
+                            label_name,
+                            extation_rate=extend_t_height_rates[l],
+                        )
+                        check_bool_ECG = (ECG_train_augment_data > 1).any().item()
+                        check_bool_PGV = (PGV_train_augment_data > 1).any().item()
+                        if check_bool_ECG == False and check_bool_PGV == False:
+                            print(
+                                "extend_t_offset_rate:{} is ablable".format(
+                                    str(extend_t_height_rates[l])
+                                )
+                            )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_t_height_rate:{} is not ablable".format(
+                                    str(extend_t_offset_rates[l])
+                                )
+                            )
+                            print(
+                                "name:{},heartbeat_num={}extation_rate={}".format(
+                                    TARGET_NAME, str(i), str(l)
+                                )
+                            )
+                            # input("")
+                            break
+
+                if DataAugumentation == "pr_and_height":  # P波の高さを変えるデータ拡張
+                    p_onset = pt_array[0]
+                    p_offset = pt_array[2]
+                    extend_p_height_rates = [
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.1,
+                        1.2,
+                        1.3,
+                        1.4,
+                        1.5,
+                    ]
+                    for l in range(len(extend_p_height_rates)):
+                        # check_value=(datalength-t_offset)/(t_onset-r_offset)#ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        (
+                            ECG_train_augment_data,
+                            PGV_train_augment_data,
+                            label_name_augment,
+                            pt_array_augument,
+                        ) = make_t_height_extation(
+                            PGV_train[0],
+                            ECG_train[0],
+                            pt_array,
+                            label_name,
+                            extation_rate=extend_p_height_rates[l],
+                        )
+                        check_bool_ECG = (ECG_train_augment_data > 1).any().item()
+                        check_bool_PGV = (PGV_train_augment_data > 1).any().item()
+                        if check_bool_ECG == False and check_bool_PGV == False:
+                            print(
+                                "extend_t_offset_rate:{} is ablable".format(
+                                    str(extend_p_height_rates[l])
+                                )
+                            )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_t_height_rate:{} is not ablable".format(
+                                    str(extend_t_offset_rates[l])
+                                )
+                            )
+                            print(
+                                "name:{},heartbeat_num={}extation_rate={}".format(
+                                    TARGET_NAME, str(i), str(l)
+                                )
+                            )
+                            # input("")
+                            break
+                if (
+                    DataAugumentation == "pr" or DataAugumentation == "pr_and_height"
+                ):  # P_offsetからR_onsetを延長するデータ拡張
+                    # r_offset=230#
+                    r_onset = 170
+                    p_onset = pt_array[0]
+                    p_offset = pt_array[2]
+                    extend_p_offset_rates = [
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.1,
+                        1.2,
+                        1.3,
+                        1.4,
+                        1.5,
+                    ]
+                    for l in range(len(extend_p_offset_rates)):
+                        check_value_P = (p_onset) / (
+                            r_onset - p_offset
+                        )  # PR部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        if check_value_P > (extend_p_offset_rates[l] - 1):
+                            print(
+                                "extend_p_offset_rate:{} is ablable".format(
+                                    str(extend_p_offset_rates[l])
+                                )
+                            )
                             (
                                 ECG_train_augment_data,
                                 PGV_train_augment_data,
                                 label_name_augment,
                                 pt_array_augument,
-                            ) = make_t_height_extation(
+                            ) = make_p_onset_extension_datas(
                                 PGV_train[0],
                                 ECG_train[0],
                                 pt_array,
                                 label_name,
-                                extation_rate=extend_t_height_rates[l],
+                                extation_rate=extend_p_offset_rates[l],
                             )
-                            check_bool_ECG = (ECG_train_augment_data > 1).any().item()
-                            check_bool_PGV = (PGV_train_augment_data > 1).any().item()
-                            if check_bool_ECG == False and check_bool_PGV == False:
-                                print(
-                                    "extend_t_offset_rate:{} is ablable".format(
-                                        str(extend_t_height_rates[l])
-                                    )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # print(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_p_offset_rate:{} is not ablable".format(
+                                    str(extend_p_offset_rates[l])
                                 )
-                                PGV_train_set.append(
-                                    PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            break
+                if (
+                    DataAugumentation == "rt" or DataAugumentation == "rt_and_height"
+                ):  # P_onsetからR_onsetを延長するデータ拡張
+                    r_offset = 230  #
+                    t_offset = pt_array[1]
+                    t_onset = pt_array[3]
+                    extend_t_offset_rates = [
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.1,
+                        1.2,
+                        1.3,
+                        1.4,
+                        1.5,
+                    ]
+                    for l in range(len(extend_t_offset_rates)):
+                        check_value = (datalength - t_offset) / (
+                            t_onset - r_offset
+                        )  # ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        if check_value > (extend_t_offset_rates[l] - 1):
+                            print(
+                                "extend_t_offset_rate:{} is ablable".format(
+                                    str(extend_t_offset_rates[l])
                                 )
-                                ECG_train_set.append(
-                                    ECG_train_augment_data.view(1, 8, 400)
-                                )
-                                label_train_set.append(label_name_augment)
-                                pt_train_set.append(pt_array_augument)
-                                # input()
-                            else:
-                                print(
-                                    "extend_t_height_rate:{} is not ablable".format(
-                                        str(extend_t_offset_rates[l])
-                                    )
-                                )
-                                print(
-                                    "name:{},heartbeat_num={}extation_rate={}".format(
-                                        TARGET_NAME, str(i), str(l)
-                                    )
-                                )
-                                # input("")
-                                break
-
-                    if (
-                        DataAugumentation == "pr_and_height"
-                    ):  # P波の高さを変えるデータ拡張
-                        p_onset = pt_array[0]
-                        p_offset = pt_array[2]
-                        extend_p_height_rates = [
-                            0.5,
-                            0.6,
-                            0.7,
-                            0.8,
-                            0.9,
-                            1.1,
-                            1.2,
-                            1.3,
-                            1.4,
-                            1.5,
-                        ]
-                        for l in range(len(extend_p_height_rates)):
-                            # check_value=(datalength-t_offset)/(t_onset-r_offset)#ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                            )
                             (
                                 ECG_train_augment_data,
                                 PGV_train_augment_data,
                                 label_name_augment,
                                 pt_array_augument,
-                            ) = make_t_height_extation(
+                            ) = make_t_onset_extension_datas(
                                 PGV_train[0],
                                 ECG_train[0],
                                 pt_array,
                                 label_name,
-                                extation_rate=extend_p_height_rates[l],
+                                extation_rate=extend_t_offset_rates[l],
                             )
-                            check_bool_ECG = (ECG_train_augment_data > 1).any().item()
-                            check_bool_PGV = (PGV_train_augment_data > 1).any().item()
-                            if check_bool_ECG == False and check_bool_PGV == False:
-                                print(
-                                    "extend_t_offset_rate:{} is ablable".format(
-                                        str(extend_p_height_rates[l])
-                                    )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_t_offset_rate:{} is not ablable".format(
+                                    str(extend_t_offset_rates[l])
                                 )
-                                PGV_train_set.append(
-                                    PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            break
+                if (
+                    DataAugumentation == "pq" or DataAugumentation == "pq_and_height"
+                ):  # P_onsetからR_onsetを延長するデータ拡張
+                    q_peak = pt_array[5]  #
+                    p_offset = pt_array[2]
+                    p_onset = pt_array[0]
+                    # extend_t_offset_rates=[0.5,0.6,0.7,0.8,0.9,1.1,1.2,1.3,1.4,1.5]
+                    pq_sample = q_peak - p_offset
+                    # stte_sample=st_sample+te_sample
+                    # rand_int=torch.randint(0,stte_sample,(10,))
+                    # extend_t_offset_rates=(rand_int/st_sample).to(torch.float32)
+                    extend_p_offset_rates = torch.rand(10) * (
+                        1.0 + float(p_onset / pq_sample)
+                    )
+                    # extend_t_offset_rates=(rand_float/st_sample).to(torch.float32)
+                    # print(rand_float)
+                    # print()
+                    # print(extend_t_offset_rates)
+                    # input()
+                    # print(rand_int)
+                    # print(extend_t_offset_rates)
+                    # input("rand_int----------")
+                    for l in range(len(extend_p_offset_rates)):
+                        check_value = (p_onset) / (
+                            q_peak - p_offset
+                        )  # PR部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        if check_value > (extend_p_offset_rates[l] - 1):
+                            print(
+                                "extend_t_offset_rate:{} is ablable".format(
+                                    str(extend_p_offset_rates[l])
                                 )
-                                ECG_train_set.append(
-                                    ECG_train_augment_data.view(1, 8, 400)
+                            )
+                            (
+                                ECG_train_augment_data,
+                                PGV_train_augment_data,
+                                label_name_augment,
+                                pt_array_augument,
+                            ) = make_pq_extension_datas(
+                                PGV_train[0],
+                                ECG_train[0],
+                                pt_array,
+                                label_name,
+                                extation_rate=extend_p_offset_rates[l],
+                            )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_p_offset_rate:{} is not ablable".format(
+                                    str(extend_p_offset_rates[l])
                                 )
-                                label_train_set.append(label_name_augment)
-                                pt_train_set.append(pt_array_augument)
-                                # input()
-                            else:
-                                print(
-                                    "extend_t_height_rate:{} is not ablable".format(
-                                        str(extend_t_offset_rates[l])
-                                    )
+                            )
+                            break
+                if (
+                    DataAugumentation == "st" or DataAugumentation == "st_and_height"
+                ):  # P_onsetからR_onsetを延長するデータ拡張
+                    s_peak = pt_array[6]  #
+                    t_offset = pt_array[1]
+                    t_onset = pt_array[3]
+                    # extend_t_offset_rates=[0.5,0.6,0.7,0.8,0.9,1.1,1.2,1.3,1.4,1.5]
+                    st_sample = t_onset - s_peak
+                    te_sample = datalength - t_offset
+                    # stte_sample=st_sample+te_sample
+                    # rand_int=torch.randint(0,stte_sample,(10,))
+                    # extend_t_offset_rates=(rand_int/st_sample).to(torch.float32)
+                    extend_t_offset_rates = torch.rand(10) * (
+                        1.0 + float(te_sample / st_sample)
+                    )
+                    # extend_t_offset_rates=(rand_float/st_sample).to(torch.float32)
+                    # print(rand_float)
+                    # print()
+                    # print(extend_t_offset_rates)
+                    # input()
+                    # print(rand_int)
+                    # print(extend_t_offset_rates)
+                    # input("rand_int----------")
+                    # input()
+                    for l in range(len(extend_t_offset_rates)):
+                        check_value = (datalength - t_offset) / (
+                            t_onset - s_peak
+                        )  # ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
+                        if check_value > (extend_t_offset_rates[l] - 1):
+                            print(
+                                "extend_t_offset_rate:{} is ablable".format(
+                                    str(extend_t_offset_rates[l])
                                 )
-                                print(
-                                    "name:{},heartbeat_num={}extation_rate={}".format(
-                                        TARGET_NAME, str(i), str(l)
-                                    )
+                            )
+                            (
+                                ECG_train_augment_data,
+                                PGV_train_augment_data,
+                                label_name_augment,
+                                pt_array_augument,
+                            ) = make_st_extension_datas(
+                                PGV_train[0],
+                                ECG_train[0],
+                                pt_array,
+                                label_name,
+                                extation_rate=extend_t_offset_rates[l],
+                            )
+                            PGV_train_set.append(
+                                PGV_train_augment_data.view(1, 15, 400)
+                            )
+                            ECG_train_set.append(ECG_train_augment_data.view(1, 8, 400))
+                            label_train_set.append(label_name_augment)
+                            pt_train_set.append(pt_array_augument)
+                            # input()
+                        else:
+                            print(
+                                "extend_t_offset_rate:{} is not ablable".format(
+                                    str(extend_t_offset_rates[l])
                                 )
-                                # input("")
-                                break
-                    if (
-                        DataAugumentation == "pr"
-                        or DataAugumentation == "pr_and_height"
-                    ):  # P_offsetからR_onsetを延長するデータ拡張
-                        # r_offset=230#
-                        r_onset = 170
-                        p_onset = pt_array[0]
-                        p_offset = pt_array[2]
-                        extend_p_offset_rates = [
-                            0.5,
-                            0.6,
-                            0.7,
-                            0.8,
-                            0.9,
-                            1.1,
-                            1.2,
-                            1.3,
-                            1.4,
-                            1.5,
-                        ]
-                        for l in range(len(extend_p_offset_rates)):
-                            check_value_P = (p_onset) / (
-                                r_onset - p_offset
-                            )  # PR部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
-                            if check_value_P > (extend_p_offset_rates[l] - 1):
-                                print(
-                                    "extend_p_offset_rate:{} is ablable".format(
-                                        str(extend_p_offset_rates[l])
-                                    )
-                                )
-                                (
-                                    ECG_train_augment_data,
-                                    PGV_train_augment_data,
-                                    label_name_augment,
-                                    pt_array_augument,
-                                ) = make_p_onset_extension_datas(
-                                    PGV_train[0],
-                                    ECG_train[0],
-                                    pt_array,
-                                    label_name,
-                                    extation_rate=extend_p_offset_rates[l],
-                                )
-                                PGV_train_set.append(
-                                    PGV_train_augment_data.view(1, 15, 400)
-                                )
-                                ECG_train_set.append(
-                                    ECG_train_augment_data.view(1, 8, 400)
-                                )
-                                label_train_set.append(label_name_augment)
-                                pt_train_set.append(pt_array_augument)
-                                # print(pt_array_augument)
-                                # input()
-                            else:
-                                print(
-                                    "extend_p_offset_rate:{} is not ablable".format(
-                                        str(extend_p_offset_rates[l])
-                                    )
-                                )
-                                break
-                    if (
-                        DataAugumentation == "rt"
-                        or DataAugumentation == "rt_and_height"
-                    ):  # P_onsetからR_onsetを延長するデータ拡張
-                        r_offset = 230  #
-                        t_offset = pt_array[1]
-                        t_onset = pt_array[3]
-                        extend_t_offset_rates = [
-                            0.5,
-                            0.6,
-                            0.7,
-                            0.8,
-                            0.9,
-                            1.1,
-                            1.2,
-                            1.3,
-                            1.4,
-                            1.5,
-                        ]
-                        for l in range(len(extend_t_offset_rates)):
-                            check_value = (datalength - t_offset) / (
-                                t_onset - r_offset
-                            )  # ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
-                            if check_value > (extend_t_offset_rates[l] - 1):
-                                print(
-                                    "extend_t_offset_rate:{} is ablable".format(
-                                        str(extend_t_offset_rates[l])
-                                    )
-                                )
-                                (
-                                    ECG_train_augment_data,
-                                    PGV_train_augment_data,
-                                    label_name_augment,
-                                    pt_array_augument,
-                                ) = make_t_onset_extension_datas(
-                                    PGV_train[0],
-                                    ECG_train[0],
-                                    pt_array,
-                                    label_name,
-                                    extation_rate=extend_t_offset_rates[l],
-                                )
-                                PGV_train_set.append(
-                                    PGV_train_augment_data.view(1, 15, 400)
-                                )
-                                ECG_train_set.append(
-                                    ECG_train_augment_data.view(1, 8, 400)
-                                )
-                                label_train_set.append(label_name_augment)
-                                pt_train_set.append(pt_array_augument)
-                                # input()
-                            else:
-                                print(
-                                    "extend_t_offset_rate:{} is not ablable".format(
-                                        str(extend_t_offset_rates[l])
-                                    )
-                                )
-                                break
-                    if (
-                        DataAugumentation == "pq"
-                        or DataAugumentation == "pq_and_height"
-                    ):  # P_onsetからR_onsetを延長するデータ拡張
-                        q_peak = pt_array[5]  #
-                        p_offset = pt_array[2]
-                        p_onset = pt_array[0]
-                        # extend_t_offset_rates=[0.5,0.6,0.7,0.8,0.9,1.1,1.2,1.3,1.4,1.5]
-                        pq_sample = q_peak - p_offset
-                        # stte_sample=st_sample+te_sample
-                        # rand_int=torch.randint(0,stte_sample,(10,))
-                        # extend_t_offset_rates=(rand_int/st_sample).to(torch.float32)
-                        extend_p_offset_rates = torch.rand(10) * (
-                            1.0 + float(p_onset / pq_sample)
-                        )
-                        # extend_t_offset_rates=(rand_float/st_sample).to(torch.float32)
-                        # print(rand_float)
-                        # print()
-                        # print(extend_t_offset_rates)
-                        # input()
-                        # print(rand_int)
-                        # print(extend_t_offset_rates)
-                        # input("rand_int----------")
-                        for l in range(len(extend_p_offset_rates)):
-                            check_value = (p_onset) / (
-                                q_peak - p_offset
-                            )  # PR部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
-                            if check_value > (extend_p_offset_rates[l] - 1):
-                                print(
-                                    "extend_t_offset_rate:{} is ablable".format(
-                                        str(extend_p_offset_rates[l])
-                                    )
-                                )
-                                (
-                                    ECG_train_augment_data,
-                                    PGV_train_augment_data,
-                                    label_name_augment,
-                                    pt_array_augument,
-                                ) = make_pq_extension_datas(
-                                    PGV_train[0],
-                                    ECG_train[0],
-                                    pt_array,
-                                    label_name,
-                                    extation_rate=extend_p_offset_rates[l],
-                                )
-                                PGV_train_set.append(
-                                    PGV_train_augment_data.view(1, 15, 400)
-                                )
-                                ECG_train_set.append(
-                                    ECG_train_augment_data.view(1, 8, 400)
-                                )
-                                label_train_set.append(label_name_augment)
-                                pt_train_set.append(pt_array_augument)
-                                # input()
-                            else:
-                                print(
-                                    "extend_p_offset_rate:{} is not ablable".format(
-                                        str(extend_p_offset_rates[l])
-                                    )
-                                )
-                                break
-                    if (
-                        DataAugumentation == "st"
-                        or DataAugumentation == "st_and_height"
-                    ):  # P_onsetからR_onsetを延長するデータ拡張
-                        s_peak = pt_array[6]  #
-                        t_offset = pt_array[1]
-                        t_onset = pt_array[3]
-                        # extend_t_offset_rates=[0.5,0.6,0.7,0.8,0.9,1.1,1.2,1.3,1.4,1.5]
-                        st_sample = t_onset - s_peak
-                        te_sample = datalength - t_offset
-                        # stte_sample=st_sample+te_sample
-                        # rand_int=torch.randint(0,stte_sample,(10,))
-                        # extend_t_offset_rates=(rand_int/st_sample).to(torch.float32)
-                        extend_t_offset_rates = torch.rand(10) * (
-                            1.0 + float(te_sample / st_sample)
-                        )
-                        # extend_t_offset_rates=(rand_float/st_sample).to(torch.float32)
-                        # print(rand_float)
-                        # print()
-                        # print(extend_t_offset_rates)
-                        # input()
-                        # print(rand_int)
-                        # print(extend_t_offset_rates)
-                        # input("rand_int----------")
-                        # input()
-                        for l in range(len(extend_t_offset_rates)):
-                            check_value = (datalength - t_offset) / (
-                                t_onset - s_peak
-                            )  # ST部を引き延ばす水増しをしても大丈夫か確かめる指標。1以上でOK
-                            if check_value > (extend_t_offset_rates[l] - 1):
-                                print(
-                                    "extend_t_offset_rate:{} is ablable".format(
-                                        str(extend_t_offset_rates[l])
-                                    )
-                                )
-                                (
-                                    ECG_train_augment_data,
-                                    PGV_train_augment_data,
-                                    label_name_augment,
-                                    pt_array_augument,
-                                ) = make_st_extension_datas(
-                                    PGV_train[0],
-                                    ECG_train[0],
-                                    pt_array,
-                                    label_name,
-                                    extation_rate=extend_t_offset_rates[l],
-                                )
-                                PGV_train_set.append(
-                                    PGV_train_augment_data.view(1, 15, 400)
-                                )
-                                ECG_train_set.append(
-                                    ECG_train_augment_data.view(1, 8, 400)
-                                )
-                                label_train_set.append(label_name_augment)
-                                pt_train_set.append(pt_array_augument)
-                                # input()
-                            else:
-                                print(
-                                    "extend_t_offset_rate:{} is not ablable".format(
-                                        str(extend_t_offset_rates[l])
-                                    )
-                                )
-                                break
+                            )
+                            break
 
     for i in range(len(label_train_set)):
         print(label_train_set[i], pt_train_set[i])
@@ -2161,57 +2141,52 @@ def Dataset_setup_8ch_pt_augmentation(
     else:
         ave_path = ""
     for j in range(len(Test_list)):
-        for base_ch in base_channels:
-            path_to_dataset = directory_path + "/" + Test_list[j] + "/" + base_ch + "/"
-            for i in range(dataset_num):
-                path = (
-                    path_to_dataset
-                    + ave_path
-                    + "dataset_{}.csv".format(str(i).zfill(3))
-                )
-                pt_path = path_to_dataset + "ponset_toffset_{}.csv".format(
-                    str(i).zfill(3)
-                )
-                if not os.path.isfile(path):
-                    print("no file in " + Test_list[j])
-                    pass
-                else:
-                    label_name = replace_slash_with_underscore(
-                        Test_list[j]
-                    ) + "_dataset{}".format(str(i).zfill(3))
-                    data = pd.read_csv(path, header=None, skiprows=1)
-                    df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
-                    pt_array = np.array(df_pt.iloc[0], dtype=int)
+        path_to_dataset = directory_path + "/" + Test_list[j] + "/"
+        for i in range(dataset_num):
+            path = path_to_dataset + ave_path + "dataset_{}.csv".format(str(i).zfill(3))
+            pt_path = (
+                path_to_dataset
+                + ave_path
+                + "ponset_toffset_{}.csv".format(str(i).zfill(3))
+            )
+            if not os.path.isfile(path):
+                print("no file in " + Test_list[j])
+                pass
+            else:
+                label_name = replace_slash_with_underscore(
+                    Test_list[j]
+                ) + "_dataset{}".format(str(i).zfill(3))
+                data = pd.read_csv(path, header=None, skiprows=1)
+                df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
+                pt_array = np.array(df_pt.iloc[0], dtype=int)
 
-                    data_ecg = data.drop(drop_col_ecg, axis=1)
-                    sh_ecg = data_ecg.shape
-                    data_ecg.columns = range(sh_ecg[1])
+                data_ecg = data.drop(drop_col_ecg, axis=1)
+                sh_ecg = data_ecg.shape
+                data_ecg.columns = range(sh_ecg[1])
 
-                    data_mul = data.drop(drop_col_mul, axis=1)
-                    sh_mul = data_mul.shape
-                    data_mul.columns = range(sh_mul[1])
-                    print("TARGET_NAME={}".format(Test_list[j]))
-                    PGV_test = torch.FloatTensor(data_mul.T.values)
-                    print(i)
-                    PGV_test = PGV_test.reshape(-1, 15, datalength)
-                    PGV_test = normalize_tensor_data(PGV_test)
-                    # if(transform_type=="normal"):#これは12ｎ誘導のP波T波の情報をつかってｋ埋めているから良くない⇒P波T波の位置を推論するｗモデルをつくるべき
-                    # PGV_test = pt_extend(PGV_test.clone(), pt_array)
-                    print("gggggggggggggggggggg")
-                    print(PGV_test)
-                    PGV_test_set.append(PGV_test)
+                data_mul = data.drop(drop_col_mul, axis=1)
+                sh_mul = data_mul.shape
+                data_mul.columns = range(sh_mul[1])
+                print("TARGET_NAME={}".format(Test_list[j]))
+                PGV_test = torch.FloatTensor(data_mul.T.values)
+                PGV_test = PGV_test.reshape(-1, 15, datalength)
+                PGV_test = normalize_tensor_data(PGV_test)
+                # if(transform_type=="normal"):#これは12ｎ誘導のP波T波の情報をつかってｋ埋めているから良くない⇒P波T波の位置を推論するｗモデルをつくるべき
+                # PGV_test = pt_extend(PGV_test.clone(), pt_array)
+                print("gggggggggggggggggggg")
+                PGV_test_set.append(PGV_test)
 
-                    ECG_test = torch.FloatTensor(data_ecg.T.values)
-                    ECG_test = ECG_test.reshape(-1, ecg_ch_num, datalength)
-                    ECG_test = normalize_tensor_data(ECG_test)
-                    # if transform_type == "normal":
-                    #     ECG_test = pt_extend(ECG_test.clone(), pt_array)
-                    ECG_test_set.append(ECG_test)
-                    label_test_set.append(label_name)
-                    # print(label_name)
-                    pt_test_set.append(pt_array)
+                ECG_test = torch.FloatTensor(data_ecg.T.values)
+                ECG_test = ECG_test.reshape(-1, ecg_ch_num, datalength)
+                ECG_test = normalize_tensor_data(ECG_test)
+                # if transform_type == "normal":
+                #     ECG_test = pt_extend(ECG_test.clone(), pt_array)
+                ECG_test_set.append(ECG_test)
+                label_test_set.append(label_name)
+                # print(label_name)
+                pt_test_set.append(pt_array)
     # print(PGV_train_set)
-    print(PGV_test_set)
+    # print(PGV_test_set)
     print("kakakakakakakakakkakaka")
     PGV_train_set = torch.cat(PGV_train_set, dim=0)
     ECG_train_set = torch.cat(ECG_train_set, dim=0)

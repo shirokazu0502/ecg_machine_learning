@@ -31,7 +31,7 @@ for patient_info in "${PATIENTS[@]}"; do
     DATE=$(echo $patient_info | cut -d' ' -f2)
 
     # 出力先ディレクトリを作成
-    OUTPUT_DIR="/mnt/ecg_project/src/processed_data/best_resample_per_heart/${NAME}_${DATE}"
+    OUTPUT_DIR="/mnt/ecg_project/src/processed_data/best_resample/${NAME}_${DATE}"
     mkdir -p $OUTPUT_DIR
 
     # Pythonスクリプトを実行

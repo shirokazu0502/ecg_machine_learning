@@ -447,7 +447,7 @@ def Dataset_setup_8ch_pt_augmentation(
     Train_list, Test_list = Train_Test_person_datas2(dir_names, target_name=TARGET_NAME)
 
     # The 12-lead ECG columns to be dropped to get the input data
-    ecg_12_lead_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
+    output_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
 
     if ave_data_flg == 1:
         ave_path = "moving_ave_datasets"
@@ -463,10 +463,12 @@ def Dataset_setup_8ch_pt_augmentation(
                     path_to_dataset, ave_path, "dataset_{}.csv".format(str(i).zfill(3))
                 )
                 pt_path = os.path.join(
-                    path_to_dataset, "ponset_toffset_{}.csv".format(str(i).zfill(3))
+                    path_to_dataset,
+                    ave_path,
+                    "ponset_toffset_{}.csv".format(str(i).zfill(3)),
                 )
 
-                if not os.path.isfile(path) or not os.path.isfile(pt_path):
+                if not os.path.isfile(path):
                     pass
                 else:
                     label_name = replace_slash_with_underscore(
@@ -474,13 +476,23 @@ def Dataset_setup_8ch_pt_augmentation(
                     ) + "_dataset{}".format(str(i).zfill(3))
                     # Load full data, header is now at row 0
                     data = pd.read_csv(path, header=0)
-                    df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
-                    pt_array = np.array(df_pt.iloc[0], dtype=int)
+                    # pt_pathがある場合のみ処理を行う
+                    if os.path.isfile(pt_path):
+                        df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
+                        pt_array = np.array(df_pt.iloc[0], dtype=int)
+                    else:
+                        pt_array = np.array([0, 0], dtype=int)
 
-                    # Select input and output columns by index
-                    data_mul = data.iloc[:, 2:17]
-                    output_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
+                    # Dynamically select input columns based on num_channels
+                    # Assuming 'Time' is the first column (index 0),
+                    # and virtual channels start from index 1.
+                    input_start_col = 2  # User requested to start from index 2
+                    input_end_col = input_start_col + num_channels
+                    data_mul = data.iloc[:, input_start_col:input_end_col]
+
+                    # Output columns remain fixed as per user's instruction
                     data_ecg = data[output_cols]
+
                     PGV_train = torch.FloatTensor(data_mul.T.values)
                     PGV_train = PGV_train.reshape(-1, num_channels, datalength)
                     PGV_train = normalize_tensor_data(PGV_train)
@@ -501,7 +513,9 @@ def Dataset_setup_8ch_pt_augmentation(
                     path_to_dataset, ave_path, "dataset_{}.csv".format(str(i).zfill(3))
                 )
                 pt_path = os.path.join(
-                    path_to_dataset, "ponset_toffset_{}.csv".format(str(i).zfill(3))
+                    path_to_dataset,
+                    ave_path,
+                    "ponset_toffset_{}.csv".format(str(i).zfill(3)),
                 )
                 if not os.path.isfile(path):
                     pass
@@ -510,12 +524,21 @@ def Dataset_setup_8ch_pt_augmentation(
                         Test_list[j]
                     ) + "_dataset{}".format(str(i).zfill(3))
                     data = pd.read_csv(path, header=0)
-                    df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
-                    pt_array = np.array(df_pt.iloc[0], dtype=int)
+                    # pt_pathがある場合のみ処理を行う
+                    if os.path.isfile(pt_path):
+                        df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
+                        pt_array = np.array(df_pt.iloc[0], dtype=int)
+                    else:
+                        pt_array = np.array([0, 0], dtype=int)
 
-                    # Select input and output columns by index
-                    data_mul = data.iloc[:, 2:17]
-                    output_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
+                    # Dynamically select input columns based on num_channels
+                    # Assuming 'Time' is the first column (index 0),
+                    # and virtual channels start from index 1.
+                    input_start_col = 2  # User requested to start from index 2
+                    input_end_col = input_start_col + num_channels
+                    data_mul = data.iloc[:, input_start_col:input_end_col]
+
+                    # Output columns remain fixed as per user's instruction
                     data_ecg = data[output_cols]
 
                     PGV_test = torch.FloatTensor(data_mul.T.values)

@@ -13,19 +13,24 @@ sys.path.append(project_root)
 
 def get_sensor_coordinates(orientation="normal"):
     """
-    Returns the 2D coordinates for the 16 sensors based on Pattern B.
-    Handles 'normal' and 'flipped' (180-degree rotation) orientations.
+    Returns the 2D coordinates for the 16 sensors.
+    - 'normal': ch_1 is at the bottom-right (3,0).
+    - 'flipped': ch_1 is at the top-left (0,3).
     """
     coords = {}
-    for i in range(16):
+    for i in range(16):  # i is 0-indexed
         if orientation == "normal":
-            col = i // 4
-            row = 3 - (i % 4)
-        elif orientation == "flipped":
+            # ch_1 is at (3,0)
             col = 3 - (i // 4)
             row = i % 4
+        elif orientation == "flipped":
+            # ch_1 is at (0,3)
+            col = i // 4
+            row = 3 - (i % 4)
         else:
             raise ValueError("Invalid orientation specified. Use 'normal' or 'flipped'.")
+        
+        # coords key is 1-indexed
         coords[f"ch_{i+1}"] = (col, row)
     return coords
 
@@ -138,7 +143,7 @@ if __name__ == "__main__":
     # #############  CONFIGURATION FOR THE SCRIPT RUN  ###############
     # ##################################################################
     subject_name_full = "noda_0714_0.8s"
-    args.orientation = "normal"  # <--- CHANGE THIS: "normal" or "flipped"
+    args.orientation = "flipped"  # <--- CHANGE THIS: "normal" or "flipped"
     # ##################################################################
 
     # Input directory with original 16-channel data

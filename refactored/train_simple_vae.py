@@ -64,15 +64,27 @@ def main():
         log_dir=f"runs/{args.current_time}/{args.TARGET_NAME}/SimpleVAE_log"
     )
 
-    train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
-        TARGET_NAME=args.TARGET_NAME,
-        transform_type=args.transform_type,
-        Dataset_name=args.Dataset_name,
-        dataset_num=args.dataset_num,
-        DataAugumentation=args.p_augumentation,  # Using p_aug as a generic one
-        ave_data_flg=args.ave_data_flg,
-        num_channels=args.num_channels,
-    )
+    if args.Dataset_name == "15ch_arrange_direction":
+        train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
+            TARGET_NAME=args.TARGET_NAME,
+            transform_type=args.transform_type,
+            Dataset_name=args.Dataset_name,
+            dataset_num=args.dataset_num,
+            DataAugumentation=args.p_augumentation,
+            ave_data_flg=args.ave_data_flg,
+            num_channels=args.num_channels,
+        )
+    else:
+        train_dataset, test_dataset = Dataset.Dataset_setup_virtual_9ch(
+            TARGET_NAME=args.TARGET_NAME,
+            transform_type=args.transform_type,
+            Dataset_name=args.Dataset_name,
+            dataset_num=args.dataset_num,
+            DataAugumentation=args.p_augumentation,
+            ave_data_flg=args.ave_data_flg,
+            orientation=args.orientation,
+            num_channels=args.num_channels,
+        )
 
     ts = (
         datetime.datetime.fromtimestamp(time.time()).strftime("%Y%m%d_%H%M%S")
