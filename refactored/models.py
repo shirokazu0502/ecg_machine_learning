@@ -336,32 +336,118 @@ class UNet1D(nn.Module):
         return output
 
 
-# class LSTMModel(nn.Module):
-#     def __init__(self, input_size, hidden_size, num_layers, output_size, datalength):
-#         super(LSTMModel, self).__init__()
-#         self.hidden_size = hidden_size
-#         self.num_layers = num_layers
-#         self.output_size = output_size
-#         self.datalength = datalength
-#         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-#         self.fc = nn.Linear(hidden_size, output_size)
+class SimpleCNN(nn.Module):
+    def __init__(self, num_channels=15, out_channels=8, depth=4, init_filters=32):
+        super(SimpleCNN, self).__init__()
+        self.encoder = nn.ModuleList()
+        self.decoder = nn.ModuleList()
+        self.depth = depth
 
-#     def forward(self, x):
-#         # x shape: (batch_size, num_channels, datalength)
-#         # Permute to (batch_size, datalength, num_channels) for LSTM
-#         x = x.permute(0, 2, 1)  # (batch_size, datalength, input_size)
+        # Encoder
+        in_ch = num_channels
+        for i in range(depth):
+            out_ch = init_filters * (2**i)
+            self.encoder.append(DoubleConv1d(in_ch, out_ch))
+            self.encoder.append(nn.MaxPool1d(2))
+            in_ch = out_ch
 
-#         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-#         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        # Bottleneck
+        self.bottleneck = DoubleConv1d(in_ch, init_filters * (2**depth))
 
-#         out, _ = self.lstm(x, (h0, c0))
-#         # out shape: (batch_size, datalength, hidden_size)
-#         out = self.fc(out)
-#         # out shape: (batch_size, datalength, output_size)
+        # Decoder
+        in_ch = init_filters * (2**depth)
+        for i in reversed(range(depth)):
+            out_ch = init_filters * (2**i)
+            self.decoder.append(
+                nn.ConvTranspose1d(in_ch, out_ch, kernel_size=2, stride=2)
+            )
+            self.decoder.append(DoubleConv1d(out_ch, out_ch))
+            in_ch = out_ch
 
-#         # Permute back to (batch_size, output_size, datalength)
-#         out = out.permute(0, 2, 1)
-#         return out
+        self.out_conv = nn.Conv1d(in_ch, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        # Encoder path
+        for i in range(0, len(self.encoder), 2):
+            x = self.encoder[i](x)
+            x = self.encoder[i + 1](x)
+
+        # Bottleneck
+        x = self.bottleneck(x)
+
+        # Decoder path
+        for i in range(0, len(self.decoder), 2):
+            x = self.decoder[i](x)
+            x = self.decoder[i + 1](x)
+
+        return torch.sigmoid(self.out_conv(x))
+
+
+class CNN_LSTM_Model(nn.Module):
+    def __init__(
+        self,
+        num_channels=15,
+        out_channels=8,
+        cnn_filters_1=32,
+        cnn_filters_2=64,
+        cnn_kernel_size=5,
+        lstm_hidden_size=128,
+        lstm_num_layers=1,
+    ):
+        super(CNN_LSTM_Model, self).__init__()
+
+        self.cnn_block = nn.Sequential(
+            nn.Conv1d(
+                in_channels=num_channels,
+                out_channels=cnn_filters_1,
+                kernel_size=cnn_kernel_size,
+                padding="same",
+            ),
+            nn.ReLU(),
+            nn.Conv1d(
+                in_channels=cnn_filters_1,
+                out_channels=cnn_filters_2,
+                kernel_size=cnn_kernel_size,
+                padding="same",
+            ),
+            nn.ReLU(),
+        )
+
+        self.lstm = nn.LSTM(
+            input_size=cnn_filters_2,
+            hidden_size=lstm_hidden_size,
+            num_layers=lstm_num_layers,
+            batch_first=True,
+        )
+
+        self.fc = nn.Linear(in_features=lstm_hidden_size, out_features=out_channels)
+
+    def forward(self, x):
+        # Input shape: (batch_size, num_channels, datalength)
+
+        # CNN processing
+        x = self.cnn_block(x)
+        # Shape after CNN: (batch_size, cnn_filters_2, datalength)
+
+        # Prepare for LSTM
+        x = x.permute(0, 2, 1)
+        # Shape for LSTM: (batch_size, datalength, cnn_filters_2)
+
+        # LSTM processing
+        x, _ = self.lstm(x)
+        # Shape after LSTM: (batch_size, datalength, lstm_hidden_size)
+
+        # Fully connected layer processing
+        x = self.fc(x)
+
+        # Add Sigmoid activation to constrain output to [0, 1]
+        x = torch.sigmoid(x)
+
+        # Final permutation
+        x = x.permute(0, 2, 1)
+        # Final output shape: (batch_size, out_channels, datalength)
+
+        return x
 
 
 class LSTMModel(nn.Module):
@@ -387,6 +473,9 @@ class LSTMModel(nn.Module):
         # out shape: (batch_size, datalength, hidden_size)
         out = self.fc(out)
         # out shape: (batch_size, datalength, output_size)
+
+        # Add Sigmoid activation to constrain output to [0, 1]
+        out = torch.sigmoid(out)
 
         # Permute back to (batch_size, output_size, datalength)
         out = out.permute(0, 2, 1)

@@ -230,7 +230,7 @@ def main():
     parser.add_argument(
         "--subject_dir",
         type=str,
-        default="data/processed/15ch_arrange_direction/asano_0714_0.8s",
+        default="data/processed/for_best_resample/ikejima_0714_0.8s",
         help="Path to the subject's data directory, relative to the project root.",
     )
     # Arguments for the new 15-channel vector definition

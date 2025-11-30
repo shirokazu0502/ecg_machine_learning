@@ -24,6 +24,7 @@ import neurokit2 as nk
 import warnings
 import csv
 from matplotlib.ticker import MultipleLocator
+import shutil
 
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(base_dir)
@@ -609,7 +610,8 @@ class ArrayComparator:
         # best_indexは16ch側の最適な開始インデックス
         last_peak_12ch_time = self.sc_12ch[0].iloc[-1]
         last_peak_16ch_time = self.sc_16ch[0].iloc[best_index + small_size]
-        final_peak_diff = abs(last_peak_12ch_time - last_peak_16ch_time)
+        # final_peak_diff = abs(last_peak_12ch_time - last_peak_16ch_time)
+        final_peak_diff = 0  # final_peak_diffは使わないので0にしておく
 
         print("12chの最初のピークのtime={}".format(time1[target]))
         print("16chの対応するピークのtime={}".format(time2[best_index]))
@@ -1852,28 +1854,6 @@ def normalize_data(df):
     return normalized_df
 
 
-def shift_with_edge(signal: np.ndarray, shift: int) -> np.ndarray:
-    """
-    Shifts a 1D signal, padding with edge values.
-    - shift > 0: shifts to the right (delay)
-    - shift < 0: shifts to the left (advance)
-    """
-    N = len(signal)
-    if shift == 0:
-        return signal
-
-    shifted_signal = np.empty_like(signal)
-    if shift > 0:  # Right shift
-        shifted_signal[:shift] = signal[0]  # Pad left with start value
-        shifted_signal[shift:] = signal[:-shift]
-    else:  # Left shift
-        abs_shift = -shift
-        shifted_signal[:-abs_shift] = signal[abs_shift:]
-        shifted_signal[-abs_shift:] = signal[-1]  # Pad right with end value
-
-    return shifted_signal
-
-
 class HeartbeatCutter_prt:
     def __init__(self, con_data, time_length, prt_eles, args):
         self.con_data = con_data
@@ -2938,7 +2918,8 @@ def PTwave_search3(
     #         f"目視で手動設定を行う:1, ファイル読み込みで設定を行う:2 neurokitを用いる:3\n"
     #     )
     # )
-    manual_setting = 3
+    # manual_setting = 1 # 1: pqrst全てマニュアル 2: ファイル読み込み 3: 全て自動
+    manual_setting = 2
     save_data_num = 0  # 保存できた波形の数（条件を満たさなかったデータを除く）
     for i in range(rpeak_num):
         rpeak = rpeaks[i]
@@ -3001,45 +2982,52 @@ def PTwave_search3(
                         ]
                     )
                     print(rpeak - p_Onset_ele)
-            # 疾患患者の場合
+            # 各波検出がうまくいかない被験者の場合
             elif manual_setting == 2:
                 # ponset_toffsetファイル読み込み
                 p_to_t_filename = f"ponset_toffset_{save_data_num:03d}.csv"
-                points_df = pd.read_csv(
+                file_path = (
                     args.dataset_output_path
                     + "/"
                     + args.output_filepath
                     + "/"
-                    + p_to_t_filename,
+                    + p_to_t_filename
                 )
-                print("points_df", points_df)
-                p_onset_list = points_df["p_onset"]
-                t_offset_list = points_df["t_offset"]
-                print(p_onset_list, t_offset_list)
-                p_Onset_ele = points_df.get("p_onset", [None])[0]
-                p_Peaks_ele = points_df.get("p_peak", [None])[0]
-                p_Offset_ele = points_df.get("p_offset", [None])[0]
-                t_Onset_ele = points_df.get("t_onset", [None])[0]
-                t_Peaks_ele = points_df.get("t_peak", [None])[0]
-                t_Offset_ele = points_df.get("t_offset", [None])[0]
-                q_Peaks_ele = points_df.get("q_peak", [None])[0]
-                s_Peaks_ele = points_df.get("s_peak", [None])[0]
-                # rpeak_ele_in_all = points_df.get("r_peak", [None])[0]
+                try:
+                    points_df = pd.read_csv(file_path)
+                    print("points_df", points_df)
+                    p_onset_list = points_df["p_onset"]
+                    t_offset_list = points_df["t_offset"]
+                    print(p_onset_list, t_offset_list)
+                    p_Onset_ele = points_df.get("p_onset", [None])[0]
+                    p_Peaks_ele = points_df.get("p_peak", [None])[0]
+                    p_Offset_ele = points_df.get("p_offset", [None])[0]
+                    t_Onset_ele = points_df.get("t_onset", [None])[0]
+                    t_Peaks_ele = points_df.get("t_peak", [None])[0]
+                    t_Offset_ele = points_df.get("t_offset", [None])[0]
+                    q_Peaks_ele = points_df.get("q_peak", [None])[0]
+                    s_Peaks_ele = points_df.get("s_peak", [None])[0]
+                    # rpeak_ele_in_all = points_df.get("r_peak", [None])[0]
 
-                data_list.append(
-                    [
-                        p_Onset_ele,
-                        rpeak,
-                        t_Offset_ele,
-                        p_Offset_ele,
-                        t_Onset_ele,
-                        p_Peaks_ele,
-                        q_Peaks_ele,
-                        s_Peaks_ele,
-                        t_Peaks_ele,
-                    ]
-                )
-                save_data_num += 1
+                    data_list.append(
+                        [
+                            p_Onset_ele,
+                            rpeak,
+                            t_Offset_ele,
+                            p_Offset_ele,
+                            t_Onset_ele,
+                            p_Peaks_ele,
+                            q_Peaks_ele,
+                            s_Peaks_ele,
+                            t_Peaks_ele,
+                        ]
+                    )
+                    save_data_num += 1
+                except FileNotFoundError:
+                    print(
+                        f"Info: {p_to_t_filename} not found. Stopping heartbeat processing for this subject."
+                    )
+                    break
 
             elif manual_setting == 1:
                 # # p波オンセット、T波オフセット手動設定
@@ -3265,6 +3253,34 @@ def shift_with_edge(signal: np.ndarray, shift: int) -> np.ndarray:
         return padded[-shift : -shift + N]  # -shift is positive here
 
 
+def calculate_average_pt_array(ponset_files, r_peak_fixed_value=150):
+    """
+    Averages the pt_array values from multiple ponset_toffset.csv files.
+    """
+    pt_arrays = []
+    for f in ponset_files:
+        if os.path.exists(f):
+            pt_df = pd.read_csv(f)
+            pt_arrays.append(pt_df.to_numpy())
+
+    if not pt_arrays:
+        return None
+
+    # Calculate the mean across all pt_arrays
+    avg_pt_array = np.mean(pt_arrays, axis=0)
+
+    # Set the fixed value for the R-peak
+    # Assuming r_peak is at index 4 based on previous user feedback
+    avg_pt_array[0, 4] = r_peak_fixed_value
+
+    # Round all values to the nearest integer
+    final_pt_array = np.round(avg_pt_array).astype(int)
+
+    # Return as a DataFrame to be saved easily
+    final_pt_df = pd.DataFrame(final_pt_array, columns=pt_df.columns)
+    return final_pt_df
+
+
 def calculate_moving_average(csv_files, moving_ave_path, group_size=5):
     print(csv_files)
     print(moving_ave_path)
@@ -3285,6 +3301,16 @@ def calculate_moving_average(csv_files, moving_ave_path, group_size=5):
         # 平均結果を保存
         combined_df.to_csv(output_path, index=False)
         print(f"Processed and saved: {output_path}")
+
+        # --- Start of new logic: Average ponset_toffset.csv ---
+        ponset_files = [f.replace("dataset_", "ponset_toffset_") for f in group]
+        avg_pt_df = calculate_average_pt_array(ponset_files)
+
+        if avg_pt_df is not None:
+            ponset_output_path = moving_ave_path + f"/ponset_toffset_{i:03d}.csv"
+            avg_pt_df.to_csv(ponset_output_path, index=False)
+            print(f"Processed and saved: {ponset_output_path}")
+        # --- End of new logic ---
 
 
 def delineate_averaged_heartbeats(moving_ave_dir, sampling_rate=500):
@@ -3536,6 +3562,14 @@ def create_15ch_variations(args):
                 new_file_path = os.path.join(target_dir, file_name)
                 final_df.to_csv(new_file_path, index=False)
 
+                # --- Start of new logic: Copy ponset_toffset.csv ---
+                ponset_filename = "ponset_toffset_" + file_name.split("_")[1]
+                source_ponset_path = os.path.join(source_dir, ponset_filename)
+                target_ponset_path = os.path.join(target_dir, ponset_filename)
+                if os.path.exists(source_ponset_path):
+                    shutil.copyfile(source_ponset_path, target_ponset_path)
+                # --- End of new logic ---
+
             except Exception as e:
                 print(
                     f"Error processing file {file_path} for base_ch {base_ch_name}: {e}"
@@ -3548,9 +3582,6 @@ def create_15ch_variations(args):
             create_directory_if_not_exists(moving_ave_path)
             print(f"Calculating moving average for {target_dir_name}...")
             calculate_moving_average(newly_created_files, moving_ave_path, group_size=5)
-
-            # Delineate PQRST waves for the averaged heartbeats
-            delineate_averaged_heartbeats(moving_ave_path, sampling_rate=RATE)
 
     print("--- Finished creating 15-channel differential dataset variations ---")
 
@@ -3745,13 +3776,59 @@ def main(args):
         time_length=args.time_range,
         method=args.peak_method,
     )  # 1213からPQRST全部検出できるcwt方を使う。
+
+    # --- NEW LOGIC: Determine best reference channel ---
+    print(
+        "\n--- Determining best reference channel based on average heartbeat amplitude ---"
+    )
+    all_heartbeats = []
+    center_idxs = prt_eles[:, 1]
+
+    # Use the same windowing logic as in cut_heartbeats
+    window_before = 150
+    window_after = 250  # Total 400 points
+
+    for center_idx in center_idxs:
+        start_idx = center_idx - window_before
+        end_idx = start_idx + (
+            window_before + window_after
+        )  # end_idx = center_idx + 250
+        if start_idx >= 0 and end_idx <= len(con_data):
+            beat_data = con_data.iloc[start_idx:end_idx].copy()
+            # The index needs to be reset for groupby to work correctly
+            beat_data.reset_index(drop=True, inplace=True)
+            all_heartbeats.append(beat_data)
+
+    best_ref_ch = TARGET_CHANNEL_16ch  # Default to original
+    # if all_heartbeats:
+    #     # Calculate the mean beat
+    #     avg_beat_df = pd.concat(all_heartbeats).groupby(level=0).mean()
+
+    #     # Find channel with max amplitude in the 16ch data
+    #     df_16ch_cols = [col for col in avg_beat_df.columns if col.startswith("ch_")]
+    #     avg_beat_16ch = avg_beat_df[df_16ch_cols]
+
+    #     # Find the peak-to-peak amplitude for each channel
+    #     peak_to_peak_amps = avg_beat_16ch.max() - avg_beat_16ch.min()
+
+    #     # Get the channel name with the largest peak-to-peak amplitude
+    #     best_ref_ch = peak_to_peak_amps.idxmax()
+    #     print(
+    #         f"Average beat analysis complete. Best reference channel found: {best_ref_ch}"
+    #     )
+    # else:
+    #     print(
+    #         "No heartbeats found to calculate average. Using default reference channel."
+    #     )
+    # --- END OF NEW LOGIC ---
+
     heartbeat_cutter_prt = HeartbeatCutter_prt(
         con_data.copy(), time_length=args.time_range, prt_eles=prt_eles, args=args
     )  # 切り出す秒数を指定する。
     print(prt_eles)
     heartbeat_cutter_prt.cut_heartbeats(
         file_path=args.dataset_output_path + "/" + args.output_filepath,
-        ch=TARGET_CHANNEL_16ch,
+        ch=best_ref_ch,  # Use the dynamically found best channel
         cut_min_max_range=cut_min_max_range,
         args=args,
     )
@@ -3818,7 +3895,9 @@ if __name__ == "__main__":
     # args.name='goto'#yoshikura takahashi matumoto
     # args.date='1219'
 
-    # args.name, args.date = select_name_and_date()
+    # args.name, args.date = '1109'
+    # args.name = "nishio"
+    # args.date = "0513"
     args.peak_method = (
         "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
     )

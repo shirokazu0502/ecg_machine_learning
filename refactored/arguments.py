@@ -8,13 +8,16 @@ import datetime
 
 
 def get_args():
-    current_time = datetime.date.today().strftime("LSTM_%Y%m%d%H_after_rotation")
+    current_time = datetime.date.today().strftime("CNN_%Y%m%d%H_15ch_arrange_direction")
     datalength = int(RATE * 0.8)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--p_augumentation", type=str, default="")
-    parser.add_argument("--r_augumentation", type=str, default="")
-    parser.add_argument("--t_augumentation", type=str, default="")
+    parser.add_argument(
+        "--DataAugmentation",
+        type=str,
+        default="",
+        help="Comma-separated string of augmentations to apply (e.g., 'pq_warp,st_warp,t_height')",
+    )
     parser.add_argument("--Dataset_name", type=str, default="")
     parser.add_argument("--loss_pt_on_off", type=str, default="off")
     parser.add_argument("--loss_pt_on_off_R_weight", type=str, default="")
@@ -24,7 +27,7 @@ def get_args():
     parser.add_argument("--TARGET_NAME", type=str, default="")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=500)
-    parser.add_argument("--train_batch_size", type=int, default=16)
+    parser.add_argument("--train_batch_size", type=int, default=4)
     parser.add_argument("--test_batch_size", type=int, default=1)
     parser.add_argument("--val_batch_size", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=0.0005)
@@ -58,8 +61,20 @@ def get_args():
     parser.add_argument("--num_channels", type=int, default=15)
     parser.add_argument("--orientation", type=str, default="normal")
     parser.add_argument("--ave_data_flg", type=int, default=0)
+
+    # Model-specific hyperparameters
     parser.add_argument("--base_filters", type=int, default=32)
     parser.add_argument("--lstm_hidden_size", type=int, default=128)
     parser.add_argument("--lstm_num_layers", type=int, default=2)
+
+    # CNN-LSTM specific
+    parser.add_argument("--cnn_filters_1", type=int, default=32)
+    parser.add_argument("--cnn_filters_2", type=int, default=64)
+    parser.add_argument("--cnn_kernel_size", type=int, default=5)
+
+    # SimpleCNN specific
+    parser.add_argument("--cnn_depth", type=int, default=4)
+    parser.add_argument("--cnn_init_filters", type=int, default=32)
+
     args = parser.parse_args()
     return args

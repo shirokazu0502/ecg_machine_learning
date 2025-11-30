@@ -7,7 +7,9 @@ from glob import glob
 from tqdm import tqdm
 
 # Add base directory to sys.path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.append(project_root)
 
 
@@ -28,8 +30,10 @@ def get_sensor_coordinates(orientation="normal"):
             col = i // 4
             row = 3 - (i % 4)
         else:
-            raise ValueError("Invalid orientation specified. Use 'normal' or 'flipped'.")
-        
+            raise ValueError(
+                "Invalid orientation specified. Use 'normal' or 'flipped'."
+            )
+
         # coords key is 1-indexed
         coords[f"ch_{i+1}"] = (col, row)
     return coords
@@ -87,7 +91,10 @@ def process_directory(input_dir, output_dir, orientation="normal"):
 
             # Ensure 16-ch data exists
             if not all(ch in df.columns for ch in physical_ch_names):
-                print(f"Warning: 16-ch data not found in {file_path}. Skipping.", file=sys.stderr)
+                print(
+                    f"Warning: 16-ch data not found in {file_path}. Skipping.",
+                    file=sys.stderr,
+                )
                 continue
 
             # Separate 16ch data from other data (Time, 12-lead, etc.)
@@ -96,8 +103,10 @@ def process_directory(input_dir, output_dir, orientation="normal"):
 
             # Separate Time and 12-lead data
             time_cols = [col for col in df_non_16ch.columns if "Time" in col]
-            df_time = df_non_16ch[time_cols] if time_cols else pd.DataFrame(index=df.index)
-            df_12lead = df_non_16ch.drop(columns=time_cols, errors='ignore')
+            df_time = (
+                df_non_16ch[time_cols] if time_cols else pd.DataFrame(index=df.index)
+            )
+            df_12lead = df_non_16ch.drop(columns=time_cols, errors="ignore")
 
             # Create 9-ch virtual electrode data
             df_virtual_9ch = create_virtual_electrodes(df_16ch, orientation)
@@ -137,13 +146,14 @@ if __name__ == "__main__":
     # Arguments are set directly for simplicity
     class Args:
         pass
+
     args = Args()
 
     # ##################################################################
     # #############  CONFIGURATION FOR THE SCRIPT RUN  ###############
     # ##################################################################
-    subject_name_full = "noda_0714_0.8s"
-    args.orientation = "flipped"  # <--- CHANGE THIS: "normal" or "flipped"
+    subject_name_full = "nishio_0513_0.8s"
+    args.orientation = "normal"  # <--- CHANGE THIS: "normal" or "flipped"
     # ##################################################################
 
     # Input directory with original 16-channel data
@@ -153,7 +163,12 @@ if __name__ == "__main__":
     # Output directory for the new 9-channel virtual electrode dataset
     output_subject_dir = f"{subject_name_full}_{args.orientation}"
     args.output_dir = os.path.join(
-        project_root, "data", "processed", "virtual_electrode_dataset", output_subject_dir, "0"
+        project_root,
+        "data",
+        "processed",
+        "virtual_electrode_dataset",
+        output_subject_dir,
+        "0",
     )
 
     main(args)

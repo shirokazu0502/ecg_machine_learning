@@ -1,12 +1,26 @@
+#!/bin/bash
+# List of unique TARGET_NAME values
+TARGET_NAMES=("patient4" "asano" "gosha" "goto" "ikejima" "nishio" "takahashi_jr" "kanda" "kawai" "matumoto" "nakashimizu" "noda" "taniguchi" "yoshikura"  "patient6" "patient8" "patient9")
 
-# #icceの時のデータ
-# names="asano gosha matumoto mori sato taniguchi"
-# dataset_date="icce0120"
-# subject_group="2"
-# #腹部につけた時のデータ
-measure_names="asano"
+for name in "${TARGET_NAMES[@]}"; do
+    echo "Running for TARGET_NAME: $name"
 
-for name in $measure_names; do
-    python3 train_unet.py --TARGET_NAME "$name" --epochs 300  --mode train --transform_type normal --Dataset_name 15ch_arrange_direction --loss_pt_on_off off --ave_data_flg 1 --train_batch_size 4
-    python3 train_unet.py --TARGET_NAME "$name" --epochs 300  --mode test --transform_type normal --Dataset_name 15ch_arrange_direction --loss_pt_on_off off  --ave_data_flg 1
+    # Training
+    python3 train_unet.py \
+        --TARGET_NAME "$name" \
+        --Dataset_name 15ch_arrange_direction \
+        --mode train \
+        --epochs 1000 \
+        --train_batch_size 16 \
+        --num_channels 15 \
+        --ave_data_flg 1
+
+    # Testing
+    python3 train_unet.py \
+        --TARGET_NAME "$name" \
+        --Dataset_name 15ch_arrange_direction \
+        --mode test \
+        --num_channels 15 \
+        --ave_data_flg 1
+
 done

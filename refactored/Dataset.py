@@ -27,6 +27,7 @@ from settings import (
     TIME,
     DATASET_MADE_DATE,
 )
+import utils  # Import the refactored utils
 
 
 def replace_slash_with_underscore(input_string):
@@ -154,74 +155,6 @@ def Normalize(in_data):
     return in_data
 
 
-class random_slide2(object):
-    def __call__(self, data, random_number):
-        slide_data = torch.zeros_like(data[:, :750])
-        slide_data = data[:, random_number : random_number + 750]
-        return slide_data
-
-
-class random_slide(object):
-    def __call__(self, data, random_numbers):
-        slide_data = torch.zeros_like(data[:, :, :750])
-        for i in range(len(random_numbers)):
-            slide_data[i] = data[i, :, random_numbers[i] : random_numbers[i] + 750]
-        return slide_data
-
-
-class Original_Compose(object):
-    def __call__(self, data, random_number):
-        Normalize = NormalizeTimeSeries()
-        data = Normalize(data)
-        random_slider = random_slide()
-        data = random_slider(data, random_number)
-        return data
-
-
-class MyDataset(TensorDataset):
-    def __init__(self, in_data, out_data, name, transform=None, transform2=None):
-        self.in_data = in_data
-        self.out_data = out_data
-        self.data_num = len(in_data)
-        self.name = name
-        self.transform = transform
-        self.transform2 = transform2
-
-    def __len__(self):
-        return self.data_num
-
-    def __getitem__(self, idx):
-        if self.transform:
-            mul_data = self.transform(self.in_data)[idx]
-            ecg_data = self.transform(self.out_data)[idx]
-            name = self.name[idx]
-        else:
-            mul_data = self.in_data[idx]
-            ecg_data = self.out_data[idx]
-            name = self.name[idx]
-
-        return mul_data, ecg_data, name
-
-
-class MyDataset_15ch_only(TensorDataset):
-    def __init__(self, in_data, name, pt_index, transform=None):
-        self.in_data = in_data
-        self.data_num = len(in_data)
-        self.name = name
-        self.transform = transform
-        self.pt_index = pt_index
-
-    def __len__(self):
-        return self.data_num
-
-    def __getitem__(self, idx):
-        mul_data = self.in_data[idx]
-        name = self.name[idx]
-        pt_index = self.pt_index[idx]
-
-        return mul_data, name, pt_index
-
-
 class MyDataset5(TensorDataset):
     def __init__(self, in_data, out_data, name, pt_index, transform=None):
         self.in_data = in_data
@@ -243,217 +176,46 @@ class MyDataset5(TensorDataset):
         return mul_data, ecg_data, name, pt_index
 
 
-class MyDataset4(TensorDataset):
-    def __init__(self, in_data, out_data, name, pt_index, transform=None):
-        self.in_data = in_data
-        self.out_data = out_data
-        self.data_num = len(in_data)
-        self.name = name
-        self.transform = transform
-        self.pt_index = pt_index
-
-    def __len__(self):
-        return self.data_num
-
-    def __getitem__(self, idx):
-        random_number = torch.randint(low=0, high=251, size=(1,))
-        mul_data = self.in_data[idx]
-        ecg_data = self.out_data[idx]
-        mul_data = self.transform(mul_data, random_number)
-        ecg_data = self.transform(ecg_data, random_number)
-        name = self.name[idx]
-        pt_index = self.pt_index[idx] - random_number.detach().numpy().copy()
-
-        return mul_data, ecg_data, name, pt_index
-
-
-class MyDataset3(TensorDataset):
-    def __init__(self, in_data, out_data, name, transform=None):
-        self.in_data = in_data
-        self.out_data = out_data
-        self.data_num = len(in_data)
-        self.name = name
-        self.transform = transform
-
-    def __len__(self):
-        return self.data_num
-
-    def __getitem__(self, idx):
-        batch_size = self.in_data.shape[0]
-        random_numbers = torch.randint(low=0, high=251, size=(batch_size,))
-        mul_data = self.transform(self.in_data, random_numbers)[idx]
-        ecg_data = self.transform(self.out_data, random_numbers)[idx]
-        name = self.name[idx]
-
-        return mul_data, ecg_data, name
-
-
-class MyDataset2(TensorDataset):
-    def __init__(self, in_data, out_data, name, transform=None, transform2=None):
-        self.in_data = in_data
-        self.out_data = out_data
-        self.data_num = len(in_data)
-        self.name = name
-        self.transform = transform
-        self.transform2 = transform2
-
-    def __len__(self):
-        return self.data_num
-
-    def __getitem__(self, idx):
-        if self.transform:
-            if self.transform2:
-                batch_size = self.in_data.shape[0]
-                random_numbers = torch.randint(low=0, high=251, size=(batch_size,))
-                mul_data = self.transform(self.in_data)
-                ecg_data = self.transform(self.out_data)
-                mul_data = self.transform2(mul_data, random_numbers)[idx]
-                ecg_data = self.transform2(ecg_data, random_numbers)[idx]
-            else:
-                mul_data = self.transform(self.in_data[:, :, 125:875])[idx]
-                ecg_data = self.transform(self.out_data[:, :, 125:875])[idx]
-        else:
-            if self.transform2:
-                batch_size = self.in_data.shape[0]
-                random_numbers = torch.randint(low=0, high=251, size=(batch_size,))
-                mul_data = self.transform2(self.in_data, random_numbers)[idx]
-                ecg_data = self.transform2(self.out_data, random_numbers)[idx]
-            else:
-                mul_data = self.in_data[:, :, 125:875][idx]
-                ecg_data = self.out_data[:, :, 125:875][idx]
-
-        name = self.name[idx]
-
-        return mul_data, ecg_data, name
-
-
-class MyDataset_for_estimate(TensorDataset):
-    def __init__(self, in_data, out_data, name, transform=None):
-        self.in_data = in_data
-        self.out_data = out_data
-        self.data_num = len(in_data)
-        self.name = name
-        self.transform = transform
-
-    def __len__(self):
-        return self.data_num
-
-    def __getitem__(self, idx):
-        pgv_data = self.in_data[idx]
-        name = self.name[idx]
-
-        return pgv_data, name
-
-
-def noise_make(mean, scale, datanum, ch_num):
-    rnd = np.random.normal(loc=mean, scale=scale, size=datanum * ch_num)
-    rnd = rnd.reshape(-1, datanum, ch_num)
-    return rnd
-
-
-def create_noise_data(PGV_torch, mean, scale, datanum, ch_num):
-    noise = noise_make(mean, scale, datanum, ch_num)
-    PGV_noise = PGV_torch + noise
-    return PGV_noise
-
-
-def min_max_2(x):
-    x = x.to("cpu").detach().numpy().copy()
-    num = x.shape[0]
-    for i in range(num):
-        min_val = x[i].min(axis=None, keepdims=True)
-        max_val = x[i].max(axis=None, keepdims=True)
-        if (max_val - min_val) != 0:
-            a = max(abs(max_val), abs(min_val))
-            x[i] = x[i] / (2.0 * a) + 0.5
-    x = torch.FloatTensor(x)
-    return x
-
-
 def normalize_tensor_data(tensor):
     global_max_val = torch.max(torch.abs(tensor))
-    normalized_data = 0.5 * (tensor / global_max_val) + 0.5
-    return normalized_data
-
-
-def pt_extend(tensor, pt_array):
-    num_data = tensor.size(0)
-    data_length = tensor.size(2)
-    new_data = tensor
-    for i in range(num_data):
-        time_data = tensor[i]
-        pwave = time_data[:, pt_array[0]]
-        twave = time_data[:, pt_array[1]]
-        for j in range(pt_array[0]):
-            new_data[i, :, j] = pwave
-        for j in range(data_length - pt_array[1]):
-            new_data[i, :, pt_array[1] + j] = twave
-    return new_data
-
-
-def linear_interpolation_All(extation_range_ECG, extation_range_PGV, extation_rate):
-    length = extation_range_ECG.shape[1]
-    x = np.arange(length)
-    new_x = np.linspace(0, length - 1, int((length) * extation_rate))
-    ECG_shape = (extation_range_ECG.shape[0], len(new_x))
-    new_tensor_ECG = torch.zeros(ECG_shape, dtype=torch.float32)
-    PGV_shape = (extation_range_PGV.shape[0], len(new_x))
-    new_tensor_PGV = torch.zeros(PGV_shape, dtype=torch.float32)
-    for i in range(extation_range_ECG.shape[0]):
-        data = extation_range_ECG[i, :].numpy().copy()
-        interpolator = interp1d(x, data)
-        new_data = interpolator(new_x)
-        new_data_tensor_ECG = torch.tensor(new_data)
-        new_tensor_ECG[i] = new_data_tensor_ECG
-    for i in range(extation_range_PGV.shape[0]):
-        data = extation_range_PGV[i, :].numpy().copy()
-        interpolator = interp1d(x, data)
-        new_data = interpolator(new_x)
-        new_data_tensor = torch.tensor(new_data)
-        new_tensor_PGV[i] = new_data_tensor
-    return new_tensor_ECG, new_tensor_PGV
-
-
-def get_unique_filename(base_filename, extension):
-    counter = 1
-    unique_filename = base_filename + extension
-    while os.path.exists(unique_filename):
-        unique_filename = f"{base_filename}_{counter}{extension}"
-        counter += 1
-    return unique_filename
+    if global_max_val > 0:
+        normalized_data = 0.5 * (tensor / global_max_val) + 0.5
+        return normalized_data
+    return tensor
 
 
 def Dataset_setup_8ch_pt_augmentation(
     TARGET_NAME,
-    transform_type,
     Dataset_name,
     dataset_num,
-    DataAugumentation,
+    DataAugmentation,
     ave_data_flg,
     datalength=400,
-    num_channels=15,  # New argument
+    num_channels=15,
 ):
     ecg_ch_num = 8
-    PGV_train_set = []
-    ECG_train_set = []
-    label_train_set = []
-    pt_train_set = []
-    PGV_test_set = []
-    ECG_test_set = []
-    label_test_set = []
-    pt_test_set = []
+    PGV_train_set, ECG_train_set, label_train_set, pt_train_set = [], [], [], []
+    PGV_test_set, ECG_test_set, label_test_set, pt_test_set = [], [], [], []
+
     directory_path = os.path.join(PROCESSED_DATA_DIR, Dataset_name)
     dir_names = get_directory_names_all(directory_path)
     Train_list, Test_list = Train_Test_person_datas2(dir_names, target_name=TARGET_NAME)
 
-    # The 12-lead ECG columns to be dropped to get the input data
     output_cols = ["A1", "A2", "V1", "V2", "V3", "V4", "V5", "V6"]
-
-    if ave_data_flg == 1:
-        ave_path = "moving_ave_datasets"
-    else:
-        ave_path = ""
+    ave_path = "moving_ave_datasets" if ave_data_flg == 1 else ""
     base_channels = [""]
+
+    # --- Augmentation Control ---
+    augmentations_to_apply = (
+        DataAugmentation.split(",") if DataAugmentation else []
+    )
+    AUGMENTATION_MAP = {
+        "pq_warp": utils.make_pq_extension_datas,
+        "st_warp": utils.make_st_extension_datas,
+        "p_height": utils.make_p_height_extation,
+        "t_height": utils.make_t_height_extation,
+    }
+    # --- End Augmentation Control ---
 
     for j in range(len(Train_list)):
         for base_ch in base_channels:
@@ -468,43 +230,73 @@ def Dataset_setup_8ch_pt_augmentation(
                     "ponset_toffset_{}.csv".format(str(i).zfill(3)),
                 )
 
-                if not os.path.isfile(path):
-                    pass
-                else:
-                    label_name = replace_slash_with_underscore(
-                        Train_list[j]
-                    ) + "_dataset{}".format(str(i).zfill(3))
-                    # Load full data, header is now at row 0
-                    data = pd.read_csv(path, header=0)
-                    # pt_pathがある場合のみ処理を行う
-                    if os.path.isfile(pt_path):
-                        df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
-                        pt_array = np.array(df_pt.iloc[0], dtype=int)
-                    else:
-                        pt_array = np.array([0, 0], dtype=int)
+                if not (os.path.isfile(path) and os.path.isfile(pt_path)):
+                    continue
 
-                    # Dynamically select input columns based on num_channels
-                    # Assuming 'Time' is the first column (index 0),
-                    # and virtual channels start from index 1.
-                    input_start_col = 2  # User requested to start from index 2
-                    input_end_col = input_start_col + num_channels
-                    data_mul = data.iloc[:, input_start_col:input_end_col]
+                label_name = f"{Train_list[j].replace('/', '_')}_dataset{str(i).zfill(3)}"
+                data = pd.read_csv(path, header=0)
+                df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
+                pt_array = np.array(df_pt.iloc[0], dtype=int)
 
-                    # Output columns remain fixed as per user's instruction
-                    data_ecg = data[output_cols]
+                input_start_col = 2
+                input_end_col = input_start_col + num_channels
+                data_mul = data.iloc[:, input_start_col:input_end_col]
+                data_ecg = data[output_cols]
 
-                    PGV_train = torch.FloatTensor(data_mul.T.values)
-                    PGV_train = PGV_train.reshape(-1, num_channels, datalength)
-                    PGV_train = normalize_tensor_data(PGV_train)
-                    PGV_train_set.append(PGV_train)
+                PGV_train = torch.FloatTensor(data_mul.T.values).reshape(
+                    -1, num_channels, datalength
+                )
+                ECG_train = torch.FloatTensor(data_ecg.T.values).reshape(
+                    -1, ecg_ch_num, datalength
+                )
 
-                    ECG_train = torch.FloatTensor(data_ecg.T.values)
-                    ECG_train = ECG_train.reshape(-1, ecg_ch_num, datalength)
-                    ECG_train = normalize_tensor_data(ECG_train)
-                    ECG_train_set.append(ECG_train)
-                    label_train_set.append(label_name)
-                    pt_train_set.append(pt_array)
+                # Append original data
+                PGV_train_set.append(normalize_tensor_data(PGV_train))
+                ECG_train_set.append(normalize_tensor_data(ECG_train))
+                label_train_set.append(label_name)
+                pt_train_set.append(pt_array)
 
+                # --- Apply Augmentations ---
+                if not augmentations_to_apply:
+                    continue
+
+                for aug_key in augmentations_to_apply:
+                    if aug_key not in AUGMENTATION_MAP:
+                        continue
+                    
+                    aug_func = AUGMENTATION_MAP[aug_key]
+                    
+                    # Rates can be customized or randomized here
+                    extation_rates = [0.8, 1.2] 
+                    
+                    for rate in extation_rates:
+                        try:
+                            (
+                                aug_ECG,
+                                aug_PGV,
+                                aug_label,
+                                aug_pt,
+                            ) = aug_func(
+                                PGV_train[0],
+                                ECG_train[0],
+                                pt_array,
+                                label_name,
+                                extation_rate=rate,
+                            )
+                            
+                            # Ensure augmented data has the correct shape and is normalized
+                            aug_PGV = aug_PGV.view(1, num_channels, datalength)
+                            aug_ECG = aug_ECG.view(1, ecg_ch_num, datalength)
+
+                            PGV_train_set.append(normalize_tensor_data(aug_PGV))
+                            ECG_train_set.append(normalize_tensor_data(aug_ECG))
+                            label_train_set.append(aug_label)
+                            pt_train_set.append(aug_pt)
+
+                        except Exception as e:
+                            print(f"Warning: Augmentation '{aug_key}' failed for {label_name} with rate {rate}. Error: {e}")
+                            
+    # Process Test set (no augmentation)
     for j in range(len(Test_list)):
         for base_ch in base_channels:
             path_to_dataset = os.path.join(directory_path, Test_list[j], base_ch)
@@ -517,94 +309,50 @@ def Dataset_setup_8ch_pt_augmentation(
                     ave_path,
                     "ponset_toffset_{}.csv".format(str(i).zfill(3)),
                 )
-                if not os.path.isfile(path):
-                    pass
-                else:
-                    label_name = replace_slash_with_underscore(
-                        Test_list[j]
-                    ) + "_dataset{}".format(str(i).zfill(3))
-                    data = pd.read_csv(path, header=0)
-                    # pt_pathがある場合のみ処理を行う
-                    if os.path.isfile(pt_path):
-                        df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
-                        pt_array = np.array(df_pt.iloc[0], dtype=int)
-                    else:
-                        pt_array = np.array([0, 0], dtype=int)
+                if not (os.path.isfile(path) and os.path.isfile(pt_path)):
+                    continue
+                
+                label_name = f"{Test_list[j].replace('/', '_')}_dataset{str(i).zfill(3)}"
+                data = pd.read_csv(path, header=0)
+                df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
+                pt_array = np.array(df_pt.iloc[0], dtype=int)
+                
+                input_start_col = 2
+                input_end_col = input_start_col + num_channels
+                data_mul = data.iloc[:, input_start_col:input_end_col]
+                data_ecg = data[output_cols]
 
-                    # Dynamically select input columns based on num_channels
-                    # Assuming 'Time' is the first column (index 0),
-                    # and virtual channels start from index 1.
-                    input_start_col = 2  # User requested to start from index 2
-                    input_end_col = input_start_col + num_channels
-                    data_mul = data.iloc[:, input_start_col:input_end_col]
+                PGV_test = torch.FloatTensor(data_mul.T.values).reshape(-1, num_channels, datalength)
+                ECG_test = torch.FloatTensor(data_ecg.T.values).reshape(-1, ecg_ch_num, datalength)
 
-                    # Output columns remain fixed as per user's instruction
-                    data_ecg = data[output_cols]
+                PGV_test_set.append(normalize_tensor_data(PGV_test))
+                ECG_test_set.append(normalize_tensor_data(ECG_test))
+                label_test_set.append(label_name)
+                pt_test_set.append(pt_array)
 
-                    PGV_test = torch.FloatTensor(data_mul.T.values)
-                    PGV_test = PGV_test.reshape(-1, num_channels, datalength)
-                    PGV_test = normalize_tensor_data(PGV_test)
-                    PGV_test_set.append(PGV_test)
-
-                    ECG_test = torch.FloatTensor(data_ecg.T.values)
-                    ECG_test = ECG_test.reshape(-1, ecg_ch_num, datalength)
-                    ECG_test = normalize_tensor_data(ECG_test)
-                    ECG_test_set.append(ECG_test)
-                    label_test_set.append(label_name)
-                    pt_test_set.append(pt_array)
-
+    if not PGV_train_set:
+        raise FileNotFoundError(f"No training data found for any target.")
     PGV_train_set = torch.cat(PGV_train_set, dim=0)
     ECG_train_set = torch.cat(ECG_train_set, dim=0)
+
+    if not PGV_test_set:
+        raise FileNotFoundError(f"No test data found for TARGET_NAME: {TARGET_NAME}")
     PGV_test_set = torch.cat(PGV_test_set, dim=0)
     ECG_test_set = torch.cat(ECG_test_set, dim=0)
 
-    if transform_type == "random":
-        train_dataset = MyDataset4(
-            PGV_train_set,
-            ECG_train_set,
-            label_train_set,
-            transform=random_slide2(),
-            pt_index=pt_train_set,
-        )
-        test_dataset = MyDataset4(
-            PGV_test_set,
-            ECG_test_set,
-            label_test_set,
-            transform=random_slide2(),
-            pt_index=pt_test_set,
-        )
-    elif transform_type == "normal":
-        train_dataset = MyDataset5(
-            PGV_train_set,
-            ECG_train_set,
-            label_train_set,
-            transform="",
-            pt_index=pt_train_set,
-        )
-        test_dataset = MyDataset5(
-            PGV_test_set,
-            ECG_test_set,
-            label_test_set,
-            transform="",
-            pt_index=pt_test_set,
-        )
-    elif transform_type == "abnormal":
-        train_dataset = MyDataset5(
-            PGV_train_set,
-            ECG_train_set,
-            label_train_set,
-            transform="",
-            pt_index=pt_train_set,
-        )
-        test_dataset = MyDataset5(
-            PGV_test_set,
-            ECG_test_set,
-            label_test_set,
-            transform="",
-            pt_index=pt_test_set,
-        )
-    else:
-        train_dataset = MyDataset2(PGV_train_set, ECG_train_set, label_train_set)
-        test_dataset = MyDataset2(PGV_test_set, ECG_test_set, label_test_set)
+    train_dataset = MyDataset5(
+        PGV_train_set,
+        ECG_train_set,
+        label_train_set,
+        transform=None,
+        pt_index=pt_train_set,
+    )
+    test_dataset = MyDataset5(
+        PGV_test_set,
+        ECG_test_set,
+        label_test_set,
+        transform=None,
+        pt_index=pt_test_set,
+    )
 
     return train_dataset, test_dataset

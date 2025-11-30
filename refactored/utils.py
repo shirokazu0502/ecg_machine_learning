@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import codecs
 import datetime
 from scipy import signal
+from scipy.interpolate import interp1d
 import matplotlib.cm as cm
 import matplotlib
 from scipy.stats import pearsonr
@@ -308,6 +309,7 @@ def cul_val_per_12ch(pt, acc):
 
 
 def write_to_csv(file_path, data):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)  # 追加
     file_exists = os.path.exists(file_path)
     with open(file_path, "a", newline="") as csvfile:
         fieldnames = [
@@ -330,7 +332,16 @@ def write_to_csv(file_path, data):
             "RMSE_V4",
             "RMSE_V5",
             "RMSE_V6",
-            "pearson_score",
+            "pearson_all",
+            "pearson_A1",
+            "pearson_A2",
+            "pearson_V1",
+            "pearson_V2",
+            "pearson_V3",
+            "pearson_V4",
+            "pearson_V5",
+            "pearson_V6",
+            "Relative_Roughness",
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         if not file_exists:
@@ -482,6 +493,27 @@ def loss_fn_lstm(recon_x, x, smoothness_weight=0.1):
     return mse_loss + s_loss
 
 
+def calculate_relative_roughness(recon_x, xo):
+    """
+    Calculates the relative roughness of the reconstructed signal compared to the original.
+    Roughness is defined as the mean absolute value of the second derivative.
+    """
+    # Calculate second derivative for recon_x
+    diff1_recon = recon_x[:, :, 1:] - recon_x[:, :, :-1]
+    diff2_recon = diff1_recon[:, :, 1:] - diff1_recon[:, :, :-1]
+    roughness_recon = torch.mean(torch.abs(diff2_recon))
+
+    # Calculate second derivative for xo
+    diff1_xo = xo[:, :, 1:] - xo[:, :, :-1]
+    diff2_xo = diff1_xo[:, :, 1:] - diff1_xo[:, :, :-1]
+    roughness_xo = torch.mean(torch.abs(diff2_xo))
+
+    # Calculate relative roughness, adding epsilon to avoid division by zero
+    relative_roughness = roughness_recon / (roughness_xo + 1e-8)
+
+    return relative_roughness.item()
+
+
 def add_gaussian_noise(signal, noise_level=0.05):
     """Adds Gaussian noise to a signal."""
     noise = np.random.normal(0, noise_level, signal.shape)
@@ -499,3 +531,299 @@ def add_baseline_wander(signal, wander_freq=0.05, wander_amplitude=0.1):
     t = np.arange(len(signal))
     wander = wander_amplitude * np.sin(2 * np.pi * wander_freq * t / len(signal))
     return signal + wander
+
+
+def linear_interpolation_All(extation_range_ECG, extation_range_PGV, extation_rate):
+    # 時系列データの時間情報を正規化
+    # print(extantion_range_ECG.shape[1])
+    length = extation_range_ECG.shape[1]
+    # print(extation_range_ECG)
+
+    x = np.arange(length)
+    new_x = np.linspace(0, length - 1, int((length) * extation_rate))
+    ECG_shape = (extation_range_ECG.shape[0], len(new_x))
+    # print(extation_range_ECG.shape)
+    # print(ECG_shape)
+    # input("")
+    new_tensor_ECG = torch.zeros(ECG_shape, dtype=torch.float32)
+    # print(new_tensor_ECG)
+    PGV_shape = (extation_range_PGV.shape[0], len(new_x))
+    new_tensor_PGV = torch.zeros(PGV_shape, dtype=torch.float32)
+    for i in range(extation_range_ECG.shape[0]):
+        data = extation_range_ECG[i, :].numpy().copy()
+        interpolator = interp1d(x, data)
+        new_data = interpolator(new_x)
+        new_data_tensor_ECG = torch.tensor(new_data)
+        new_tensor_ECG[i] = new_data_tensor_ECG
+        # print(new_tensor_ECG[i])
+    for i in range(extation_range_PGV.shape[0]):
+        data = extation_range_PGV[i, :].numpy().copy()
+        interpolator = interp1d(x, data)
+        new_data = interpolator(new_x)
+        new_data_tensor = torch.tensor(new_data)
+        new_tensor_PGV[i] = new_data_tensor
+    return new_tensor_ECG, new_tensor_PGV
+
+
+def make_p_onset_extension_datas(
+    PGV_datas, ECG_datas, pt_array, label_name, extation_rate
+):
+    p_offset_org = pt_array[2]
+    r_onset = pt_array[6]  # Correctly use q_peak for PR interval end
+    if p_offset_org >= r_onset:
+        return ECG_datas, PGV_datas, label_name, pt_array
+    
+    extation_range_ECG = ECG_datas[:, p_offset_org:r_onset]
+    extation_range_PGV = PGV_datas[:, p_offset_org:r_onset]
+
+    if extation_range_ECG.shape[1] <= 0:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    new_extation_range_ECG, new_extation_range_PGV = linear_interpolation_All(
+        extation_range_ECG=extation_range_ECG,
+        extation_range_PGV=extation_range_PGV,
+        extation_rate=extation_rate,
+    )
+    new_ECG_data = torch.concat(
+        [ECG_datas[:, :p_offset_org], new_extation_range_ECG, ECG_datas[:, r_onset:]],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [PGV_datas[:, :p_offset_org], new_extation_range_PGV, PGV_datas[:, r_onset:]],
+        dim=1,
+    )
+    slide_index = new_ECG_data.shape[1] - 400
+    if new_ECG_data.shape[1] > 400:
+        new_ECG_data_400 = new_ECG_data[:, (new_ECG_data.shape[1] - 400) :]
+        new_PGV_data_400 = new_PGV_data[:, (new_ECG_data.shape[1] - 400) :]
+    else:
+        First_ECG_value_tensor = new_ECG_data[:, 0]
+        First_ECG_value_tensor_view = First_ECG_value_tensor.view(
+            First_ECG_value_tensor.shape[0], 1
+        )
+        First_ECG_value_view_tensors = torch.cat(
+            [First_ECG_value_tensor_view] * (400 - new_ECG_data.shape[1]), dim=1
+        )
+        new_ECG_data_400 = torch.concat(
+            [First_ECG_value_view_tensors, new_ECG_data], dim=1
+        )
+        First_PGV_value_tensor = new_PGV_data[:, -1]
+        First_PGV_value_tensor_view = First_PGV_value_tensor.view(
+            First_PGV_value_tensor.shape[0], 1
+        )
+        First_PGV_value_view_tensors = torch.cat(
+            [First_PGV_value_tensor_view] * (400 - new_PGV_data.shape[1]), dim=1
+        )
+        new_PGV_data_400 = torch.concat(
+            [First_PGV_value_view_tensors, new_PGV_data], dim=1
+        )
+    new_label_name = label_name + "extraction_P=" + str(extation_rate)
+    pt_array_augumentation = pt_array.copy()
+    pt_array_augumentation[0] = (
+        pt_array_augumentation[0] - slide_index
+    )
+    pt_array_augumentation[2] = pt_array_augumentation[2] - slide_index
+    return new_ECG_data_400, new_PGV_data_400, new_label_name, pt_array_augumentation
+
+
+def make_t_onset_extension_datas(
+    PGV_datas, ECG_datas, pt_array, label_name, extation_rate
+):
+    t_onset_org = pt_array[3]
+    r_offset = pt_array[7]  # Use S-peak as the start of the ST segment
+    if r_offset >= t_onset_org:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    extation_range_ECG = ECG_datas[:, r_offset:t_onset_org]
+    extation_range_PGV = PGV_datas[:, r_offset:t_onset_org]
+
+    if extation_range_ECG.shape[1] <= 0:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    new_extation_range_ECG, new_extation_range_PGV = linear_interpolation_All(
+        extation_range_ECG=extation_range_ECG,
+        extation_range_PGV=extation_range_PGV,
+        extation_rate=extation_rate,
+    )
+    new_ECG_data = torch.concat(
+        [ECG_datas[:, :r_offset], new_extation_range_ECG, ECG_datas[:, t_onset_org:]],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [PGV_datas[:, :r_offset], new_extation_range_PGV, PGV_datas[:, t_onset_org:]],
+        dim=1,
+    )
+    slide_index = new_ECG_data.shape[1] - 400
+    if new_ECG_data.shape[1] > 400:
+        new_ECG_data_400 = new_ECG_data[:, :400]
+        new_PGV_data_400 = new_PGV_data[:, :400]
+
+    else:
+        last_ECG_value_tensor = new_ECG_data[:, -1]
+        last_ECG_value_tensor_view = last_ECG_value_tensor.view(
+            last_ECG_value_tensor.shape[0], 1
+        )
+        last_ECG_value_view_tensors = torch.cat(
+            [last_ECG_value_tensor_view] * (400 - new_ECG_data.shape[1]), dim=1
+        )
+        new_ECG_data_400 = torch.concat(
+            [new_ECG_data, last_ECG_value_view_tensors], dim=1
+        )
+
+        last_PGV_value_tensor = new_PGV_data[:, -1]
+        last_PGV_value_tensor_view = last_PGV_value_tensor.view(
+            last_PGV_value_tensor.shape[0], 1
+        )
+        last_PGV_value_view_tensors = torch.cat(
+            [last_PGV_value_tensor_view] * (400 - new_PGV_data.shape[1]), dim=1
+        )
+        new_PGV_data_400 = torch.concat(
+            [new_PGV_data, last_PGV_value_view_tensors], dim=1
+        )
+    new_label_name = label_name + str(extation_rate)
+    pt_array_augumentation = pt_array.copy()
+    pt_array_augumentation[1] = pt_array_augumentation[1] + slide_index
+    pt_array_augumentation[3] = pt_array_augumentation[3] + slide_index
+    return new_ECG_data_400, new_PGV_data_400, new_label_name, pt_array_augumentation
+
+
+def make_pq_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
+    p_offset_org = pt_array[2]
+    q_peak = pt_array[6]  # Correctly use q_peak for PQ interval end
+    if p_offset_org >= q_peak:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    extation_range_ECG = ECG_datas[:, p_offset_org:q_peak]
+    extation_range_PGV = PGV_datas[:, p_offset_org:q_peak]
+
+    if extation_range_ECG.shape[1] <= 0:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    new_extation_range_ECG, new_extation_range_PGV = linear_interpolation_All(
+        extation_range_ECG=extation_range_ECG,
+        extation_range_PGV=extation_range_PGV,
+        extation_rate=extation_rate,
+    )
+    new_ECG_data = torch.concat(
+        [ECG_datas[:, :p_offset_org], new_extation_range_ECG, ECG_datas[:, q_peak:]],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [PGV_datas[:, :p_offset_org], new_extation_range_PGV, PGV_datas[:, q_peak:]],
+        dim=1,
+    )
+    slide_index = new_ECG_data.shape[1] - 400
+    if new_ECG_data.shape[1] >= 400:
+        new_ECG_data_400 = new_ECG_data[:, (new_ECG_data.shape[1] - 400) :]
+        new_PGV_data_400 = new_PGV_data[:, (new_ECG_data.shape[1] - 400) :]
+    else:
+        First_ECG_value_tensor = new_ECG_data[:, 0]
+        First_ECG_value_tensor_view = First_ECG_value_tensor.view(
+            First_ECG_value_tensor.shape[0], 1
+        )
+        First_ECG_value_view_tensors = torch.cat(
+            [First_ECG_value_tensor_view] * (400 - new_ECG_data.shape[1]), dim=1
+        )
+        new_ECG_data_400 = torch.concat(
+            [First_ECG_value_view_tensors, new_ECG_data], dim=1
+        )
+
+        First_PGV_value_tensor = new_PGV_data[:, -1]
+        First_PGV_value_tensor_view = First_PGV_value_tensor.view(
+            First_PGV_value_tensor.shape[0], 1
+        )
+        First_PGV_value_view_tensors = torch.cat(
+            [First_PGV_value_tensor_view] * (400 - new_PGV_data.shape[1]), dim=1
+        )
+        new_PGV_data_400 = torch.concat(
+            [First_PGV_value_view_tensors, new_PGV_data], dim=1
+        )
+
+    new_label_name = label_name + "extraction_P=" + str(extation_rate)
+    pt_array_augumentation = pt_array.copy()
+    pt_array_augumentation[0] = pt_array_augumentation[0] - slide_index
+    pt_array_augumentation[2] = pt_array_augumentation[2] - slide_index
+    pt_array_augumentation[4] = pt_array_augumentation[4] - slide_index
+    return new_ECG_data_400, new_PGV_data_400, new_label_name, pt_array_augumentation
+
+
+def make_st_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
+    t_onset_org = pt_array[3]
+    s_peak = pt_array[7]  # Correctly use s_peak for ST segment start
+    if s_peak >= t_onset_org:
+        return ECG_datas, PGV_datas, label_name, pt_array
+    
+    extation_range_ECG = ECG_datas[:, s_peak:t_onset_org]
+    extation_range_PGV = PGV_datas[:, s_peak:t_onset_org]
+
+    if extation_range_ECG.shape[1] <= 0:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    new_extation_range_ECG, new_extation_range_PGV = linear_interpolation_All(
+        extation_range_ECG=extation_range_ECG,
+        extation_range_PGV=extation_range_PGV,
+        extation_rate=extation_rate,
+    )
+    new_ECG_data = torch.concat(
+        [ECG_datas[:, :s_peak], new_extation_range_ECG, ECG_datas[:, t_onset_org:]],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [PGV_datas[:, :s_peak], new_extation_range_PGV, PGV_datas[:, t_onset_org:]],
+        dim=1,
+    )
+    slide_index = new_ECG_data.shape[1] - 400
+    if new_ECG_data.shape[1] >= 400:
+        new_ECG_data_400 = new_ECG_data[:, :400]
+        new_PGV_data_400 = new_PGV_data[:, :400]
+    else:
+        last_ECG_value_tensor = new_ECG_data[:, -1]
+        last_ECG_value_tensor_view = last_ECG_value_tensor.view(
+            last_ECG_value_tensor.shape[0], 1
+        )
+        last_ECG_value_view_tensors = torch.cat(
+            [last_ECG_value_tensor_view] * (400 - new_ECG_data.shape[1]), dim=1
+        )
+        new_ECG_data_400 = torch.concat(
+            [new_ECG_data, last_ECG_value_view_tensors], dim=1
+        )
+
+        last_PGV_value_tensor = new_PGV_data[:, -1]
+        last_PGV_value_tensor_view = last_PGV_value_tensor.view(
+            last_PGV_value_tensor.shape[0], 1
+        )
+        last_PGV_value_view_tensors = torch.cat(
+            [last_PGV_value_tensor_view] * (400 - new_PGV_data.shape[1]), dim=1
+        )
+        new_PGV_data_400 = torch.concat(
+            [new_PGV_data, last_PGV_value_view_tensors], dim=1
+        )
+    new_label_name = label_name + str(extation_rate)
+    pt_array_augumentation = pt_array.copy()
+    pt_array_augumentation[1] = pt_array_augumentation[1] + slide_index
+    pt_array_augumentation[3] = pt_array_augumentation[3] + slide_index
+    pt_array_augumentation[7] = pt_array_augumentation[7] + slide_index
+    return new_ECG_data_400, new_PGV_data_400, new_label_name, pt_array_augumentation
+
+def sin_wave(point_num, extation_rate):
+    A = extation_rate - 1
+    frequency = 0.5
+    if point_num <= 0:
+        return 1.0  # Return a scalar float
+    t = np.linspace(0, 1, int(point_num * 1), endpoint=True)
+    y = A * np.sin(2 * np.pi * frequency * t) + 1
+    return y
+
+
+def make_p_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
+    p_onset_org = pt_array[2]
+    p_offset_org = pt_array[0]
+    if p_onset_org >= p_offset_org:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+
+def make_t_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
+    t_onset_org = pt_array[3]
+    t_offset_org = pt_array[1]
+    if t_onset_org >= t_offset_org:
+        return ECG_datas, PGV_datas, label_name, pt_array
