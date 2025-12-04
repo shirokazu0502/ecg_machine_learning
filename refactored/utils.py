@@ -572,7 +572,7 @@ def make_p_onset_extension_datas(
     r_onset = pt_array[6]  # Correctly use q_peak for PR interval end
     if p_offset_org >= r_onset:
         return ECG_datas, PGV_datas, label_name, pt_array
-    
+
     extation_range_ECG = ECG_datas[:, p_offset_org:r_onset]
     extation_range_PGV = PGV_datas[:, p_offset_org:r_onset]
 
@@ -619,9 +619,7 @@ def make_p_onset_extension_datas(
         )
     new_label_name = label_name + "extraction_P=" + str(extation_rate)
     pt_array_augumentation = pt_array.copy()
-    pt_array_augumentation[0] = (
-        pt_array_augumentation[0] - slide_index
-    )
+    pt_array_augumentation[0] = pt_array_augumentation[0] - slide_index
     pt_array_augumentation[2] = pt_array_augumentation[2] - slide_index
     return new_ECG_data_400, new_PGV_data_400, new_label_name, pt_array_augumentation
 
@@ -752,7 +750,7 @@ def make_st_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation
     s_peak = pt_array[7]  # Correctly use s_peak for ST segment start
     if s_peak >= t_onset_org:
         return ECG_datas, PGV_datas, label_name, pt_array
-    
+
     extation_range_ECG = ECG_datas[:, s_peak:t_onset_org]
     extation_range_PGV = PGV_datas[:, s_peak:t_onset_org]
 
@@ -805,6 +803,7 @@ def make_st_extension_datas(PGV_datas, ECG_datas, pt_array, label_name, extation
     pt_array_augumentation[7] = pt_array_augumentation[7] + slide_index
     return new_ECG_data_400, new_PGV_data_400, new_label_name, pt_array_augumentation
 
+
 def sin_wave(point_num, extation_rate):
     A = extation_rate - 1
     frequency = 0.5
@@ -816,10 +815,47 @@ def sin_wave(point_num, extation_rate):
 
 
 def make_p_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
-    p_onset_org = pt_array[2]
-    p_offset_org = pt_array[0]
+    p_onset_org = pt_array[0]
+    p_offset_org = pt_array[2]
+
     if p_onset_org >= p_offset_org:
         return ECG_datas, PGV_datas, label_name, pt_array
+
+    base_lines_tensor_ECG = ECG_datas[:, pt_array[0]]
+    base_lines_tensor_PGV = PGV_datas[:, pt_array[0]]
+    extation_range_ECG = ECG_datas[:, p_onset_org:p_offset_org]
+    extation_range_PGV = PGV_datas[:, p_onset_org:p_offset_org]
+    point_num = p_offset_org - p_onset_org
+
+    if point_num <= 0:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    extation_rate_sin = torch.tensor(sin_wave(point_num, extation_rate=extation_rate))
+    extation_rate_sin = extation_rate_sin.float()
+    new_extation_range_ECG = (
+        extation_range_ECG - base_lines_tensor_ECG.view(ECG_datas.shape[0], 1)
+    ) * extation_rate_sin + base_lines_tensor_ECG.view(ECG_datas.shape[0], 1)
+    new_extation_range_PGV = (
+        extation_range_PGV - base_lines_tensor_PGV.view(PGV_datas.shape[0], 1)
+    ) * extation_rate_sin + base_lines_tensor_PGV.view(PGV_datas.shape[0], 1)
+    new_ECG_data = torch.concat(
+        [
+            ECG_datas[:, :p_onset_org],
+            new_extation_range_ECG,
+            ECG_datas[:, p_offset_org:],
+        ],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [
+            PGV_datas[:, :p_onset_org],
+            new_extation_range_PGV,
+            PGV_datas[:, p_offset_org:],
+        ],
+        dim=1,
+    )
+    new_label_name = label_name + str(extation_rate)
+    return new_ECG_data, new_PGV_data, new_label_name, pt_array
 
 
 def make_t_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_rate):
@@ -827,3 +863,39 @@ def make_t_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_
     t_offset_org = pt_array[1]
     if t_onset_org >= t_offset_org:
         return ECG_datas, PGV_datas, label_name, pt_array
+
+    base_lines_tensor_ECG = ECG_datas[:, pt_array[0]]
+    base_lines_tensor_PGV = PGV_datas[:, pt_array[0]]
+    extation_range_ECG = ECG_datas[:, t_onset_org:t_offset_org]
+    extation_range_PGV = PGV_datas[:, t_onset_org:t_offset_org]
+    point_num = t_offset_org - t_onset_org
+
+    if point_num <= 0:
+        return ECG_datas, PGV_datas, label_name, pt_array
+
+    extation_rate_sin = torch.tensor(sin_wave(point_num, extation_rate=extation_rate))
+    extation_rate_sin = extation_rate_sin.float()
+    new_extation_range_ECG = (
+        extation_range_ECG - base_lines_tensor_ECG.view(ECG_datas.shape[0], 1)
+    ) * extation_rate_sin + base_lines_tensor_ECG.view(ECG_datas.shape[0], 1)
+    new_extation_range_PGV = (
+        extation_range_PGV - base_lines_tensor_PGV.view(PGV_datas.shape[0], 1)
+    ) * extation_rate_sin + base_lines_tensor_PGV.view(PGV_datas.shape[0], 1)
+    new_ECG_data = torch.concat(
+        [
+            ECG_datas[:, :t_onset_org],
+            new_extation_range_ECG,
+            ECG_datas[:, t_offset_org:],
+        ],
+        dim=1,
+    )
+    new_PGV_data = torch.concat(
+        [
+            PGV_datas[:, :t_onset_org],
+            new_extation_range_PGV,
+            PGV_datas[:, t_offset_org:],
+        ],
+        dim=1,
+    )
+    new_label_name = label_name + str(extation_rate)
+    return new_ECG_data, new_PGV_data, new_label_name, pt_array
