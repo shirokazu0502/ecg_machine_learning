@@ -8,7 +8,9 @@ import datetime
 
 
 def get_args():
-    current_time = datetime.date.today().strftime("CNN_%Y%m%d%H_15ch_arrange_direction")
+    current_time = datetime.date.today().strftime(
+        "CNN_grid_search%Y%m%d%H_15ch_arrange_direction"
+    )
     datalength = int(RATE * 0.8)
 
     parser = argparse.ArgumentParser()
@@ -74,7 +76,18 @@ def get_args():
 
     # SimpleCNN specific
     parser.add_argument("--cnn_depth", type=int, default=4)
-    parser.add_argument("--cnn_init_filters", type=int, default=32)
+    parser.add_argument(
+        "--cnn_init_filters",
+        type=int,
+        default=8,
+        help="Initial filter size for SimpleCNN",
+    )
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        required=False,
+        help="Model type to train (e.g., cnn, cnn_lstm, unet, lstm)",
+    )
 
     args = parser.parse_args()
     return args

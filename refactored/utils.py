@@ -165,7 +165,8 @@ def pearson_corr_loss_like_scipy(recon_x, x):
 
 
 def loss_fn_unet(recon_x, x, beta=0.8):
-    mse_loss = torch.nn.MSELoss(reduction="mean")(recon_x, x)
+    criterion_mse = torch.nn.MSELoss(reduction="mean")
+    mse_loss = criterion_mse(recon_x, x)
     corr_loss = pearson_corr_loss_like_scipy(recon_x, x)
     return mse_loss + beta * corr_loss
 
