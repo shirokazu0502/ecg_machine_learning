@@ -423,9 +423,7 @@ def main():
                 str(
                     args.loss_pt_on_off_T_weight
                 ),  # loss_pt_on_off_T_weightはarguments.pyに残っているためそのまま
-                args.p_augumentation,
-                args.r_augumentation,
-                args.t_augumentation,
+                args.DataAugmentation,
             )
         )
         utils.write_to_csv(output_file, data=data_to_write)

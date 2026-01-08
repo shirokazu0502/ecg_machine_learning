@@ -4,6 +4,7 @@ import os
 import random
 from glob import glob
 import numpy as np
+import time
 import itertools
 import pandas as pd
 import datetime
@@ -12,14 +13,20 @@ import sys  # Import sys
 
 # Add the directory containing this script to sys.path
 # This ensures that local modules like 'arguments' and 'Dataset' are imported correctly.
-script_dir = os.path.dirname(__file__)
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
+# script_dir = os.path.dirname(__file__)
+# if script_dir not in sys.path:
+#     sys.path.insert(0, script_dir)
+# Add the project root to the Python path
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(base_dir)
 
 import utils
 import models
 import arguments as config
 import Dataset
+from config.settings import (
+    OUTPUT_DIR,
+)
 
 # --- Configuration ---
 GRID_SEARCH_EPOCHS = 500
@@ -32,11 +39,17 @@ PARAM_GRIDS = {
         "lstm_hidden_size": [64, 128],
         "cnn_filters_2": [64, 128],
     },
+    # "cnn": {
+    #     "learning_rate": [1e-4, 1e-3],
+    #     "train_batch_size": [32, 64],
+    #     "cnn_depth": [4],
+    #     "cnn_init_filters": [16, 32],
+    # },
     "cnn": {
-        "learning_rate": [1e-4, 1e-3],
-        "train_batch_size": [16],
+        "learning_rate": [1e-3],
+        "train_batch_size": [64],
         "cnn_depth": [4],
-        "cnn_init_filters": [8, 16],
+        "cnn_init_filters": [32],
     },
     "lstm": {
         "learning_rate": [1e-4],
@@ -45,9 +58,9 @@ PARAM_GRIDS = {
         "lstm_num_layers": [1, 2],
     },
     "unet": {
-        "learning_rate": [1e-4],
-        "train_batch_size": [8, 16],
-        "base_filters": [16, 32],
+        "learning_rate": [1e-3],
+        "train_batch_size": [64],
+        "base_filters": [32],
     },
 }
 
@@ -60,15 +73,21 @@ def get_all_subject_names(dataset_name):
         for d in glob(f"{base_dir}/*/")
         if os.path.isdir(d)
     ]
-    subject_names = sorted(list(set([d.split("_")[0] for d in subject_dirs])))
+    # Handle names like 'takahashi_jr' by joining all parts except the last two (date and suffix)
+    subject_names = sorted(
+        list(set(["_".join(d.split("_")[:-2]) for d in subject_dirs]))
+    )
     return subject_names
 
 
 def evaluate_params_cv(params, all_subjects, validation_subjects, cli_args):
     """
     Evaluates a single set of hyperparameters using 3-run Leave-One-Out CV.
+    Returns average Pearson correlation, MAE, and RMSE.
     """
-    fold_scores = []
+    fold_pearson_scores = []
+    fold_mae_scores = []
+    fold_rmse_scores = []
 
     for i, val_subject in enumerate(validation_subjects):
         print(
@@ -115,7 +134,7 @@ def evaluate_params_cv(params, all_subjects, validation_subjects, cli_args):
                 "init_filters": params["cnn_init_filters"],
             }
             model = models.SimpleCNN(**model_args).to(device)
-            criterion = utils.loss_fn_unet
+            criterion = utils.loss_fn_mse_and_corr
         elif model_type == "lstm":
             model_args = {
                 "input_size": cli_args.num_channels,
@@ -133,7 +152,7 @@ def evaluate_params_cv(params, all_subjects, validation_subjects, cli_args):
                 "base_filters": params["base_filters"],
             }
             model = models.UNet1D(**model_args).to(device)
-            criterion = utils.loss_fn_unet
+            criterion = utils.loss_fn_mse_and_corr
         else:
             raise ValueError(f"Unknown model_type: {model_type}")
 
@@ -159,15 +178,30 @@ def evaluate_params_cv(params, all_subjects, validation_subjects, cli_args):
         recon_x_all = torch.cat(all_recon_x)
         xo_all = torch.cat(all_xo)
 
+        # Calculate all three metrics
         pearson_corr, _ = utils.pearsonr(
             recon_x_all.flatten().numpy(), xo_all.flatten().numpy()
         )
-        fold_scores.append(pearson_corr)
-        print(f"    - Fold {i+1} Pearson: {pearson_corr:.6f}")
+        mae_score = torch.nn.functional.l1_loss(recon_x_all, xo_all).item()
+        rmse_score = torch.sqrt(
+            torch.nn.functional.mse_loss(recon_x_all, xo_all)
+        ).item()
 
-    avg_score = np.mean(fold_scores)
-    print(f"  - Avg Pearson for this combo: {avg_score:.6f}")
-    return avg_score
+        fold_pearson_scores.append(pearson_corr)
+        fold_mae_scores.append(mae_score)
+        fold_rmse_scores.append(rmse_score)
+        print(
+            f"    - Fold {i+1} Pearson: {pearson_corr:.6f}, MAE: {mae_score:.6f}, RMSE: {rmse_score:.6f}"
+        )
+
+    avg_pearson = np.mean(fold_pearson_scores)
+    avg_mae = np.mean(fold_mae_scores)
+    avg_rmse = np.mean(fold_rmse_scores)
+
+    print(
+        f"  - Avg scores for this combo: Pearson: {avg_pearson:.6f}, MAE: {avg_mae:.6f}, RMSE: {avg_rmse:.6f}"
+    )
+    return avg_pearson, avg_mae, avg_rmse
 
 
 def run_final_training(best_params, model_type, all_subjects, cli_args):
@@ -178,10 +212,10 @@ def run_final_training(best_params, model_type, all_subjects, cli_args):
 
     # Map model_type to the correct training script
     script_map = {
-        "cnn_lstm": "refactored/train_cnn_lstm.py",
-        "cnn": "refactored/train_cnn.py",
-        "lstm": "refactored/train_lstm.py",
-        "unet": "refactored/train_unet.py",
+        "cnn_lstm": "train_cnn_lstm.py",
+        "cnn": "train_cnn.py",
+        "lstm": "train_lstm.py",
+        "unet": "train_unet.py",
     }
     train_script = script_map.get(model_type)
     if not train_script:
@@ -197,13 +231,14 @@ def run_final_training(best_params, model_type, all_subjects, cli_args):
     # Loop through all subjects, holding each one out for testing
     for target_name in all_subjects:
         print(f"\n--- Running LOOCV for TARGET_NAME: {target_name} ---")
-
         # Base command arguments
         base_cmd = [
             "python3",
             train_script,
             "--TARGET_NAME",
             target_name,
+            "--model_type",
+            model_type,  # Add this line
             "--Dataset_name",
             DATASET_NAME,
             "--num_channels",
@@ -234,6 +269,7 @@ def run_final_training(best_params, model_type, all_subjects, cli_args):
 
 def main():
     cli_args = config.get_args()
+    cli_args.num_channels = 15  # データセットに合わせて15か16を指定
     all_subjects = get_all_subject_names(DATASET_NAME)
     model_type = cli_args.model_type
 
@@ -247,9 +283,26 @@ def main():
         print("Error: Need at least 3 subjects for cross-validation.")
         return
 
+    # --- Create a unique directory for this grid search run ---
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H")
+    results_dir = os.path.join(
+        OUTPUT_DIR, "grid_search_results", f"{model_type}_{timestamp}"
+    )
+    print(results_dir)
+    # もし存在しないならディレクトリを作成
+    os.makedirs(results_dir, exist_ok=True)
+    results_csv_path = os.path.join(results_dir, "grid_search_summary.csv")
+
+    print(f"Grid search results will be saved to: {results_csv_path}")
+
     # --- Phase 1: Hyperparameter Search ---
-    random.seed(cli_args.seed)
-    validation_subjects = random.sample(all_subjects, 3)
+    # random.seed(cli_args.seed) # No longer needed for fixed validation subjects
+    # validation_subjects = random.sample(all_subjects, 3) # Commented out: Fixed validation subjects
+    validation_subjects = [
+        "asano",
+        "patient4",
+        "nakashimizu",
+    ]
 
     print("--- Phase 1: Grid Search Hyperparameter Tuning ---")
     print(f"Model Type: {model_type}")
@@ -261,18 +314,40 @@ def main():
 
     print(f"Starting grid search across {len(param_combinations)} combinations...")
 
-    best_score = -1
+    all_grid_search_results = []
+    best_score = -1  # Best score will be based on Pearson correlation
     best_params = None
 
     for i, params in enumerate(param_combinations):
         print(f"\n- Evaluating Combination {i+1}/{len(param_combinations)}: {params}")
-        avg_pearson_score = evaluate_params_cv(
+        avg_pearson, avg_mae, avg_rmse = evaluate_params_cv(
             params, all_subjects, validation_subjects, cli_args
         )
-        if avg_pearson_score > best_score:
-            best_score = avg_pearson_score
+
+        # Log results for this combination
+        result_entry = {
+            **params,
+            "avg_pearson": avg_pearson,
+            "avg_mae": avg_mae,
+            "avg_rmse": avg_rmse,
+        }
+        all_grid_search_results.append(result_entry)
+
+        if avg_pearson > best_score:
+            best_score = avg_pearson
             best_params = params
             print(f"  *** New best score found! Avg Pearson: {best_score:.6f} ***")
+
+    # --- Save all grid search results to CSV ---
+    if all_grid_search_results:
+        results_df = pd.DataFrame(all_grid_search_results)
+        # Reorder columns to have metrics first
+        metric_cols = ["avg_pearson", "avg_mae", "avg_rmse"]
+        param_cols = [col for col in results_df.columns if col not in metric_cols]
+        results_df = results_df[metric_cols + param_cols]
+        results_df.sort_values(by="avg_pearson", ascending=False, inplace=True)
+        results_df.to_csv(results_csv_path, index=False)
+        print(f"\nGrid search results saved to {results_csv_path}")
 
     print("\n--- GRID SEARCH FINISHED ---")
     if best_params:

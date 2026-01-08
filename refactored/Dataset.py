@@ -1,4 +1,5 @@
 import re
+import glob
 from re import A
 from tkinter import W
 import numpy as np
@@ -14,6 +15,7 @@ import time
 import gc
 from scipy.interpolate import interp1d
 import neurokit2 as nk
+import math
 
 from settings import (
     DATA_DIR,
@@ -28,6 +30,35 @@ from settings import (
     DATASET_MADE_DATE,
 )
 import utils  # Import the refactored utils
+
+# Define the base output directory for aggregated data (must match rereference_by_central_4ch.py)
+BASE_AGGREGATED_OUTPUT_DIR = os.path.join(PROCESSED_DATA_DIR, "reference_center_4ch")
+MANIFEST_FILE_NAME = "aggregated_patients.txt"
+
+
+def get_center_aggregated_patients():
+    """
+    Safely reads the manifest file to get a list of patient names
+    whose 'center_*' data has been aggregated.
+    Returns an empty list if the manifest file is not found.
+    """
+    manifest_path = os.path.join(BASE_AGGREGATED_OUTPUT_DIR, MANIFEST_FILE_NAME)
+    aggregated_patients = []
+    try:
+        with open(manifest_path, "r") as f:
+            for line in f:
+                patient_name = line.strip()
+                if patient_name:
+                    aggregated_patients.append(patient_name)
+    except FileNotFoundError:
+        print(
+            f"  > INFO: Manifest file '{manifest_path}' not found. No special subsetting will be applied."
+        )
+    except Exception as e:
+        print(
+            f"  > ERROR reading manifest file '{manifest_path}': {e}. No special subsetting will be applied."
+        )
+    return aggregated_patients
 
 
 def replace_slash_with_underscore(input_string):
@@ -55,15 +86,13 @@ def Train_Test_person_datas2(dirnames, target_name):
     train_list = []
     test_list = []
     for string in dirnames:
-        pattern = r"(\w+)_\w+_\w+"
-        match = re.search(pattern, string)
+        # Reconstruct the base name by taking all parts except the last two (date and suffix)
+        base_name = "_".join(string.split("_")[:-2])
 
-        if match:
-            last_name = match.group(1)
-            if last_name != target_name:
-                train_list.append(string)
-            else:
-                test_list.append(string)
+        if base_name != target_name:
+            train_list.append(string)
+        else:
+            test_list.append(string)
     return train_list, test_list
 
 
@@ -206,9 +235,7 @@ def Dataset_setup_8ch_pt_augmentation(
     base_channels = [""]
 
     # --- Augmentation Control ---
-    augmentations_to_apply = (
-        DataAugmentation.split(",") if DataAugmentation else []
-    )
+    augmentations_to_apply = DataAugmentation.split(",") if DataAugmentation else []
     AUGMENTATION_MAP = {
         "pq_warp": utils.make_pq_extension_datas,
         "st_warp": utils.make_st_extension_datas,
@@ -233,7 +260,9 @@ def Dataset_setup_8ch_pt_augmentation(
                 if not (os.path.isfile(path) and os.path.isfile(pt_path)):
                     continue
 
-                label_name = f"{Train_list[j].replace('/', '_')}_dataset{str(i).zfill(3)}"
+                label_name = (
+                    f"{Train_list[j].replace('/', '_')}_dataset{str(i).zfill(3)}"
+                )
                 data = pd.read_csv(path, header=0)
                 df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
                 pt_array = np.array(df_pt.iloc[0], dtype=int)
@@ -263,12 +292,12 @@ def Dataset_setup_8ch_pt_augmentation(
                 for aug_key in augmentations_to_apply:
                     if aug_key not in AUGMENTATION_MAP:
                         continue
-                    
+
                     aug_func = AUGMENTATION_MAP[aug_key]
-                    
+
                     # Rates can be customized or randomized here
-                    extation_rates = [0.8, 1.2] 
-                    
+                    extation_rates = [0.8, 1.2]
+
                     for rate in extation_rates:
                         try:
                             (
@@ -283,7 +312,7 @@ def Dataset_setup_8ch_pt_augmentation(
                                 label_name,
                                 extation_rate=rate,
                             )
-                            
+
                             # Ensure augmented data has the correct shape and is normalized
                             aug_PGV = aug_PGV.view(1, num_channels, datalength)
                             aug_ECG = aug_ECG.view(1, ecg_ch_num, datalength)
@@ -294,36 +323,81 @@ def Dataset_setup_8ch_pt_augmentation(
                             pt_train_set.append(aug_pt)
 
                         except Exception as e:
-                            print(f"Warning: Augmentation '{aug_key}' failed for {label_name} with rate {rate}. Error: {e}")
-                            
+                            print(
+                                f"Warning: Augmentation '{aug_key}' failed for {label_name} with rate {rate}. Error: {e}"
+                            )
+
     # Process Test set (no augmentation)
+    aggregated_patients = get_center_aggregated_patients()
     for j in range(len(Test_list)):
         for base_ch in base_channels:
-            path_to_dataset = os.path.join(directory_path, Test_list[j], base_ch)
-            for i in range(dataset_num):
-                path = os.path.join(
-                    path_to_dataset, ave_path, "dataset_{}.csv".format(str(i).zfill(3))
+            # Construct the base path to where the dataset files are located, including ave_path
+            path_to_dataset_base = os.path.join(
+                directory_path, Test_list[j], base_ch, ave_path
+            )
+
+            # First, find all available dataset files for this base_ch
+            all_test_files = sorted(
+                glob.glob(os.path.join(path_to_dataset_base, "dataset_*.csv"))
+            )
+
+            files_to_process = all_test_files  # Default to all files
+
+            # Check if this test subject is an aggregated patient
+            is_target_aggregated = False
+            for agg_patient_full_name in aggregated_patients:
+                if Test_list[j].startswith(
+                    agg_patient_full_name
+                ):  # Check if the full name starts with the short Test_list[j] name
+                    is_target_aggregated = True
+                    break
+
+            if is_target_aggregated:
+                total_files = len(all_test_files)
+                start_index = math.floor(total_files / 4)
+                end_index = math.floor(total_files / 2)
+
+                print(
+                    f"  > INFO: Test subject '{Test_list[j]}' is an aggregated patient. Applying evaluation subsetting."
                 )
+                print(
+                    f"  > INFO: Subsetting Test_list for evaluation from {total_files} to {end_index - start_index} files (indices {start_index} to {end_index-1})."
+                )
+                files_to_process = all_test_files[start_index:end_index]
+
+            # Now, iterate over the (potentially sliced) list of file paths
+            for path in files_to_process:
+                # Reconstruct the pt_path based on the dataset file path
+                file_basename = os.path.basename(path)  # e.g., dataset_000.csv
+                file_index_str = file_basename.split("_")[1].split(".")[0]  # e.g., 000
+
                 pt_path = os.path.join(
-                    path_to_dataset,
-                    ave_path,
-                    "ponset_toffset_{}.csv".format(str(i).zfill(3)),
+                    path_to_dataset_base,  # Use the base path
+                    f"ponset_toffset_{file_index_str}.csv",
                 )
+
                 if not (os.path.isfile(path) and os.path.isfile(pt_path)):
+                    print(
+                        f"  > WARNING: Missing corresponding pt_path for {os.path.basename(path)}. Skipping."
+                    )
                     continue
-                
-                label_name = f"{Test_list[j].replace('/', '_')}_dataset{str(i).zfill(3)}"
+
+                label_name = f"{Test_list[j].replace('/', '_')}_dataset{file_index_str}"
                 data = pd.read_csv(path, header=0)
                 df_pt = pd.read_csv(pt_path, header=None, skiprows=1)
                 pt_array = np.array(df_pt.iloc[0], dtype=int)
-                
+
                 input_start_col = 2
                 input_end_col = input_start_col + num_channels
                 data_mul = data.iloc[:, input_start_col:input_end_col]
                 data_ecg = data[output_cols]
 
-                PGV_test = torch.FloatTensor(data_mul.T.values).reshape(-1, num_channels, datalength)
-                ECG_test = torch.FloatTensor(data_ecg.T.values).reshape(-1, ecg_ch_num, datalength)
+                PGV_test = torch.FloatTensor(data_mul.T.values).reshape(
+                    -1, num_channels, datalength
+                )
+                ECG_test = torch.FloatTensor(data_ecg.T.values).reshape(
+                    -1, ecg_ch_num, datalength
+                )
 
                 PGV_test_set.append(normalize_tensor_data(PGV_test))
                 ECG_test_set.append(normalize_tensor_data(ECG_test))

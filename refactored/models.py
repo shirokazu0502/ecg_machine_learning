@@ -1,5 +1,13 @@
+import numpy as np
 import torch
 import torch.nn as nn
+import torch_geometric.nn as geo_nn
+from torch_geometric.data import Data, Batch
+from torch_geometric.transforms import AddLaplacianEigenvectorPE
+
+from torch_geometric.nn import GCNConv
+from utils import create_dynamic_adj  # Import the new utility function
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -485,3 +493,362 @@ class LSTMModel(nn.Module):
         # Permute back to (batch_size, output_size, datalength)
         out = out.permute(0, 2, 1)
         return out
+
+
+# class ECGReconGNN(nn.Module):
+#     def __init__(
+#         self, input_dim, hidden_dim_rnn, hidden_dim_gcn, output_dim, sequence_length
+#     ):
+#         super(ECGReconGNN, self).__init__()
+#         self.num_channels = input_dim  # 15 channels
+#         self.output_channels = output_dim  # 8 channels
+#         self.sequence_length = sequence_length
+
+#         # 1. Temporal Encoder (Node Stream)
+#         self.node_rnns = nn.ModuleList(
+#             [
+#                 nn.LSTM(input_size=1, hidden_size=hidden_dim_rnn, batch_first=True)
+#                 for _ in range(self.num_channels)
+#             ]
+#         )
+
+#         # 2. Spatial Mixer (GCN)
+#         self.gcn = GCNConv(in_channels=hidden_dim_rnn, out_channels=hidden_dim_gcn)
+
+#         # 3. Reconstruction Decoder
+#         self.reconstruction_head = nn.Linear(
+#             hidden_dim_gcn * self.num_channels, output_dim * sequence_length
+#         )
+
+#     def forward(self, x):
+#         # x shape: (batch_size, num_channels, sequence_length)
+#         if torch.isnan(x).any() or torch.isinf(x).any():
+#             print("!!! DEBUG: NaN or Inf in input x")
+
+#         batch_size, num_channels, _ = x.shape
+
+#         # Step 1: Temporal Encoding for each node
+#         node_features_list = []
+#         for i in range(num_channels):
+#             channel_data = x[:, i, :].unsqueeze(-1)
+
+#             # Clamp the data to a reasonable range to prevent instability
+#             channel_data = torch.clamp(channel_data, -5.0, 5.0)
+
+#             # Pass through LSTM
+#             _, (h_n, c_n) = self.node_rnns[i](channel_data)
+
+#             # --- Enhanced Debugging ---
+#             if torch.isnan(h_n).any() or torch.isinf(h_n).any():
+#                 print(f"!!! CRITICAL: NaN/Inf detected in HIDDEN STATE for channel {i}")
+#                 print(
+#                     f"--- Input Stats for Failing Channel {i}: Min={channel_data.min().item():.4f}, Max={channel_data.max().item():.4f}, Mean={channel_data.mean().item():.4f}"
+#                 )
+#             if torch.isnan(c_n).any() or torch.isinf(c_n).any():
+#                 print(f"!!! CRITICAL: NaN/Inf detected in CELL STATE for channel {i}")
+#             # --- End Enhanced Debugging ---
+
+#             node_features_list.append(h_n.squeeze(0))
+
+#         # Concatenate node features: (batch_size, num_channels, hidden_dim_rnn)
+#         node_features = torch.stack(node_features_list, dim=1)
+#         if torch.isnan(node_features).any() or torch.isinf(node_features).any():
+#             print("!!! DEBUG: NaN or Inf after Temporal Encoding (RNN)")
+
+#         # Step 2: Dynamic Graph Construction (Adjacency Matrix)
+#         adj_batch = create_dynamic_adj(x)
+#         if torch.isnan(adj_batch).any() or torch.isinf(adj_batch).any():
+#             print("!!! DEBUG: NaN or Inf in Adjacency Matrix")
+
+#         # Step 3: Spatial Mixing (GCN)
+#         gcn_outputs = []
+#         for i in range(batch_size):
+#             current_node_features = node_features[i]
+#             current_adj = adj_batch[i]
+#             edge_index = current_adj.nonzero(as_tuple=False).t().contiguous()
+#             edge_weight = current_adj[edge_index[0], edge_index[1]]
+#             gcn_out = self.gcn(current_node_features, edge_index, edge_weight)
+#             gcn_outputs.append(gcn_out)
+
+#         gcn_output_stacked = torch.stack(gcn_outputs, dim=0)
+#         if (
+#             torch.isnan(gcn_output_stacked).any()
+#             or torch.isinf(gcn_output_stacked).any()
+#         ):
+#             print("!!! DEBUG: NaN or Inf after Spatial Mixing (GCN)")
+
+#         # Step 4: Reconstruction Decoder
+#         flattened_output = gcn_output_stacked.view(batch_size, -1)
+#         reconstructed_flat = self.reconstruction_head(flattened_output)
+#         reconstructed_ecg = reconstructed_flat.view(
+#             batch_size, self.output_channels, self.sequence_length
+#         )
+#         if torch.isnan(reconstructed_ecg).any() or torch.isinf(reconstructed_ecg).any():
+#             print("!!! DEBUG: NaN or Inf in final reconstructed_ecg")
+
+#         return reconstructed_ecg
+
+
+# class ECGReconGNN(nn.Module):
+#     def __init__(
+#         self, input_dim, hidden_dim_rnn, hidden_dim_gcn, output_dim, sequence_length
+#     ):
+#         super(ECGReconGNN, self).__init__()
+#         self.num_channels = input_dim  # 15 channels
+#         self.output_channels = output_dim  # 8 channels
+#         self.sequence_length = sequence_length
+#         self.hidden_dim_rnn = hidden_dim_rnn
+
+#         # 1. Temporal Encoder (Node Stream) - LayerNormを追加
+#         # ModuleListで個別に持つより、バッチ処理を工夫するか、安定化層を挟むのが定石です
+#         self.node_rnns = nn.ModuleList(
+#             [
+#                 nn.LSTM(input_size=1, hidden_size=hidden_dim_rnn, batch_first=True)
+#                 for _ in range(self.num_channels)
+#             ]
+#         )
+#         # LSTM出力安定化のためのLayerNorm
+#         self.ln_rnn = nn.LayerNorm(hidden_dim_rnn)
+
+#         # 2. Spatial Mixer (GCN)
+#         self.gcn = GCNConv(in_channels=hidden_dim_rnn, out_channels=hidden_dim_gcn)
+#         self.act = nn.LeakyReLU(0.1)  # GCN後に活性化関数を追加推奨
+
+#         # 3. Reconstruction Decoder
+#         self.reconstruction_head = nn.Linear(
+#             hidden_dim_gcn * self.num_channels, output_dim * sequence_length
+#         )
+
+#         self._init_weights()
+
+#     def _init_weights(self):
+#         # LSTMの重みを直交行列で初期化（長期依存性の学習安定化）
+#         for lstm in self.node_rnns:
+#             for name, param in lstm.named_parameters():
+#                 if "weight_ih" in name:
+#                     nn.init.xavier_uniform_(param.data)
+#                 elif "weight_hh" in name:
+#                     nn.init.orthogonal_(param.data)
+#                 elif "bias" in name:
+#                     param.data.fill_(0)
+
+#     def forward(self, x):
+#         # x shape: (batch_size, num_channels, sequence_length)
+#         batch_size, num_channels, seq_len = x.shape
+
+#         # Step 1: Temporal Encoding
+#         node_features_list = []
+#         for i in range(num_channels):
+#             # チャネルごとのデータを抽出 (B, L, 1)
+#             channel_data = x[:, i, :].unsqueeze(-1)
+
+#             # --- 修正点: 入力値の安全性チェック ---
+#             # NaNがあれば0置換するなど、強制的な防御を入れることも検討
+#             if torch.isnan(channel_data).any():
+#                 channel_data = torch.nan_to_num(channel_data, nan=0.0)
+
+#             # LSTM Forward
+#             # self.node_rnns[i].flatten_parameters() # GPUメモリ効率化のおまじない
+#             _, (h_n, c_n) = self.node_rnns[i](channel_data)
+
+#             # --- 修正点: NaN発生時のガード (推論時用、学習時はlossで弾く) ---
+#             if torch.isnan(h_n).any():
+#                 # ここでログを出してもすでに遅い（重みが壊れている）ことが多いですが念のため
+#                 print(f"Warning: NaN in channel {i}, resetting to zeros.")
+#                 h_n = torch.zeros_like(h_n)
+
+#             node_features_list.append(h_n.squeeze(0))
+
+#         # (batch_size, num_channels, hidden_dim_rnn)
+#         node_features = torch.stack(node_features_list, dim=1)
+
+#         # --- 修正点: LayerNormの適用 ---
+#         # 時間方向の特徴量のスケールを整える
+#         node_features = self.ln_rnn(node_features)
+
+#         # Step 2: Dynamic Graph Construction
+#         # (create_dynamic_adjの実装によりますが、ここでのNaNチェックも重要)
+#         adj_batch = create_dynamic_adj(x)
+
+#         # Step 3: Spatial Mixing (GCN)
+#         gcn_outputs = []
+#         for i in range(batch_size):
+#             current_node_features = node_features[i]
+#             current_adj = adj_batch[i]
+#             edge_index = current_adj.nonzero(as_tuple=False).t().contiguous()
+
+#             # エッジがない場合の例外処理
+#             if edge_index.numel() == 0:
+#                 gcn_out = torch.zeros(
+#                     self.num_channels, self.gcn.out_channels, device=x.device
+#                 )
+#             else:
+#                 edge_weight = current_adj[edge_index[0], edge_index[1]]
+#                 gcn_out = self.gcn(current_node_features, edge_index, edge_weight)
+#                 gcn_out = self.act(gcn_out)  # 活性化関数
+
+#             gcn_outputs.append(gcn_out)
+
+#         gcn_output_stacked = torch.stack(gcn_outputs, dim=0)
+
+#         # Step 4: Reconstruction Decoder
+#         flattened_output = gcn_output_stacked.view(batch_size, -1)
+#         reconstructed_flat = self.reconstruction_head(flattened_output)
+
+#         reconstructed_ecg = reconstructed_flat.view(
+#             batch_size, self.output_channels, self.sequence_length
+#         )
+#         return reconstructed_ecg
+
+
+# --- GNN Block (Reference準拠) ---
+class GNNx2(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(GNNx2, self).__init__()
+        self.gnn1 = geo_nn.SSGConv(input_dim, hidden_dim, alpha=0.05)
+        self.gnn2 = geo_nn.SSGConv(hidden_dim, output_dim, alpha=0.05)
+        self.activate = nn.Tanh()  # 安定化のためTanh
+
+        if input_dim != output_dim:
+            self.skip = nn.Linear(input_dim, output_dim)
+        else:
+            self.skip = nn.Identity()
+
+    def forward(self, x, edge_index, edge_weight):
+        residual = self.skip(x)
+        x = self.gnn1(x, edge_index, edge_weight)
+        x = self.activate(x)
+        x = self.gnn2(x, edge_index, edge_weight)
+        return x + residual
+
+
+# --- Main Model ---
+class ECGReconGNN(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim_rnn,
+        hidden_dim_gcn,
+        output_dim,
+        sequence_length,
+        rnn_type="lstm",  # 'lstm' または 'gru' を指定可能
+    ):
+        super(ECGReconGNN, self).__init__()
+
+        self.num_channels = input_dim
+        self.hidden_dim_rnn = hidden_dim_rnn
+        self.hidden_dim_gcn = hidden_dim_gcn
+        self.output_channels = output_dim
+        self.sequence_length = sequence_length
+        self.rnn_type = rnn_type.lower()
+
+        self.pe_dim = 8  # Laplacian PE dimension
+
+        # 1. Input Stabilization (NaN対策)
+        self.input_act = nn.Tanh()
+
+        # 2. Temporal Encoder (LSTM / GRU)
+        # Mambaを廃止し、LSTM/GRUの切り替え式に変更
+        if self.rnn_type == "lstm":
+            self.temporal = nn.LSTM(
+                input_size=1, hidden_size=hidden_dim_rnn, batch_first=True
+            )
+            print(">> Using LSTM for Temporal Encoding")
+        elif self.rnn_type == "gru":
+            self.temporal = nn.GRU(
+                input_size=1, hidden_size=hidden_dim_rnn, batch_first=True
+            )
+            print(">> Using GRU for Temporal Encoding")
+        else:
+            raise ValueError("rnn_type must be 'lstm' or 'gru'")
+
+        self.ln_rnn = nn.LayerNorm(hidden_dim_rnn)
+
+        # 3. Laplacian Positional Encoding
+        self.laplacian_pe = AddLaplacianEigenvectorPE(k=self.pe_dim)
+
+        # 4. Spatial Mixer (GNN)
+        gnn_in_dim = hidden_dim_rnn + self.pe_dim
+
+        # エッジ重み生成用
+        self.edge_net = nn.Sequential(
+            nn.Linear(hidden_dim_rnn, 1), nn.Softplus()  # 重みは正の値
+        )
+
+        self.gnn = GNNx2(gnn_in_dim, hidden_dim_gcn, hidden_dim_gcn)
+
+        # 5. Reconstruction Decoder
+        self.reconstruction_head = nn.Sequential(
+            nn.Linear(hidden_dim_gcn * self.num_channels, 256),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(0.1),
+            nn.Linear(256, self.output_channels * self.sequence_length),
+        )
+
+    def forward(self, x):
+        # x shape: (batch_size, num_channels, sequence_length)
+        batch_size, num_channels, seq_len = x.shape
+        device = x.device
+
+        # --- Step 0: Input Guard ---
+        x = self.input_act(x)  # NaN防止
+
+        # --- Step 1: Temporal Encoding ---
+        # (B, C, L) -> (B*C, L, 1)
+        x_reshaped = x.view(batch_size * num_channels, seq_len, 1)
+
+        # LSTMとGRUで戻り値の形式が異なるため分岐処理
+        if self.rnn_type == "lstm":
+            _, (h_n, _) = self.temporal(x_reshaped)
+        else:  # gru
+            _, h_n = self.temporal(x_reshaped)
+
+        # h_n shape: (num_layers, batch*channels, hidden_dim)
+        # 最終層の隠れ状態を取得 -> (B*C, Hidden)
+        node_features = h_n[-1]
+
+        # LayerNorm & Reshape -> (B, C, Hidden)
+        node_features = self.ln_rnn(node_features)
+        node_features = node_features.view(batch_size, num_channels, -1)
+
+        # --- Step 2: Graph Construction & GNN ---
+        gnn_outputs = []
+
+        # 完全結合エッジテンプレート
+        node_indices = torch.arange(num_channels, device=device)
+        edge_index_template = torch.stack(
+            torch.meshgrid(node_indices, node_indices, indexing="ij")
+        ).reshape(2, -1)
+
+        # PE計算 (構造情報)
+        pe_data = Data(edge_index=edge_index_template, num_nodes=num_channels)
+        pe_data = self.laplacian_pe(pe_data)
+        pe = pe_data.laplacian_eigenvector_pe.to(device)  # (C, pe_dim)
+
+        for i in range(batch_size):
+            curr_nodes = node_features[i]  # (C, Hidden)
+
+            # 特徴量 + PE
+            curr_nodes_with_pe = torch.cat([curr_nodes, pe], dim=-1)
+
+            # 動的エッジ重み (簡易Attention)
+            weights = self.edge_net(curr_nodes).view(-1)
+            edge_weights = weights[edge_index_template[0]]
+
+            # NaN防止: 正規化
+            edge_weights = edge_weights / (edge_weights.max() + 1e-6)
+
+            # GNN Forward
+            out = self.gnn(curr_nodes_with_pe, edge_index_template, edge_weights)
+            gnn_outputs.append(out.flatten())
+
+        # (B, C * GCN_Hidden)
+        gnn_output_stacked = torch.stack(gnn_outputs, dim=0)
+
+        # --- Step 3: Reconstruction ---
+        flat_out = self.reconstruction_head(gnn_output_stacked)
+        reconstructed_ecg = flat_out.view(
+            batch_size, self.output_channels, self.sequence_length
+        )
+
+        return reconstructed_ecg

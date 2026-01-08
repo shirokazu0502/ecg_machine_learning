@@ -1,4 +1,5 @@
 import os
+import time
 import argparse
 from Make_dataset_0120_16ch_synchro_per_heart import (
     ecg_clean_df_16ch,
@@ -25,6 +26,7 @@ from scipy.ndimage import uniform_filter1d, median_filter
 import numpy as np
 import pandas as pd
 import neurokit2 as nk
+from matplotlib import pyplot as plt
 from config.settings import (
     DATA_DIR,
     BASE_DIR,
@@ -148,6 +150,156 @@ def clean_ecg_signal(
     return filtered_ecg
 
 
+def is_ascending(lst):
+    """
+    Checks if a list of points is strictly ascending and contains no invalid values.
+    """
+    if any(p is None or pd.isna(p) for p in lst):
+        return False
+    for i in range(len(lst) - 1):
+        if lst[i] >= lst[i + 1]:
+            return False
+    return True
+
+
+def find_p_element(arr, target):
+    """
+    Finds the element in arr that is less than or equal to target and is closest to it.
+    Used for finding P-wave and Q-wave points before the R-peak.
+    """
+    # 1. 基本的なガード句
+    if arr is None:
+        return None
+
+    # 2. 強制的に float 型の NumPy 配列に変換する
+    # これにより、[int64, nan] が混在していても [float, nan] として統一され、エラーを防げます
+    arr_np = np.array(arr, dtype=float)
+
+    # 配列が空の場合は終了
+    if arr_np.size == 0:
+        return None
+
+    # 3. NaN を除去 (float型なので安全に除去可能)
+    arr_clean = arr_np[~np.isnan(arr_np)]
+
+    # NaN除去後に空になった場合のガード
+    if arr_clean.size == 0:
+        return None
+
+    # 4. 比較用に int 型にキャスト (ECGのインデックスは整数であるため)
+    arr_int = arr_clean.astype(int)
+
+    # 5. target 以下の候補を抽出
+    candidates = arr_int[arr_int <= target]
+
+    # 候補がない場合
+    if candidates.size == 0:
+        return None
+
+    # 6. 最も近い値を返す
+    # 時系列データ(昇順)であれば最後の要素 [-1] が最も target に近くなります。
+    # 念のため max() を使うと順序関係なく最大値（最も近い値）が取れます。
+    return candidates.max()
+
+
+def find_t_element(arr, target):
+    """
+    Finds the element in arr that is greater than or equal to target and is closest to it.
+    Used for finding S-wave and T-wave points after the R-peak.
+    """
+    """
+    Finds the element in arr that is less than or equal to target and is closest to it.
+    Used for finding P-wave and Q-wave points before the R-peak.
+    """
+    # 1. 基本的なガード句
+    if arr is None:
+        return None
+
+    # 2. 強制的に float 型の NumPy 配列に変換する
+    # これにより、[int64, nan] が混在していても [float, nan] として統一され、エラーを防げます
+    arr_np = np.array(arr, dtype=float)
+
+    # 配列が空の場合は終了
+    if arr_np.size == 0:
+        return None
+
+    # 3. NaN を除去 (float型なので安全に除去可能)
+    arr_clean = arr_np[~np.isnan(arr_np)]
+
+    # NaN除去後に空になった場合のガード
+    if arr_clean.size == 0:
+        return None
+
+    # 4. 比較用に int 型にキャスト (ECGのインデックスは整数であるため)
+    arr_int = arr_clean.astype(int)
+
+    # 5. target 以下の候補を抽出
+    candidates = arr_int[arr_int >= target]
+
+    # 候補がない場合
+    if candidates.size == 0:
+        return None
+
+    # 6. 最も近い値を返す
+    # 時系列データ(昇順)であれば最初の要素 [0] が最も target に近くなります。
+    # 念のため min() を使うと順序関係なく最小値（最も近い値）が取れます。
+    return candidates.min()
+
+
+def find_valid_pqrst_set(waves_peak, rpeak, sampling_rate, time_length):
+    """
+    Finds and validates a complete set of 9 PQRST points for a single rpeak
+    from the neurokit waves_peak dictionary.
+    """
+    # 1. Get candidate points using helper functions
+    peak_dic = {}
+    peak_dic["p_onset"] = find_p_element(waves_peak.get("ECG_P_Onsets"), rpeak)
+    peak_dic["p_peak"] = find_p_element(waves_peak.get("ECG_P_Peaks"), rpeak)
+    peak_dic["p_offset"] = find_p_element(waves_peak.get("ECG_P_Offsets"), rpeak)
+    peak_dic["q_peak"] = find_p_element(waves_peak.get("ECG_Q_Peaks"), rpeak)
+    peak_dic["s_peak"] = find_t_element(waves_peak.get("ECG_S_Peaks"), rpeak)
+    peak_dic["t_onset"] = find_t_element(waves_peak.get("ECG_T_Onsets"), rpeak)
+    peak_dic["t_peak"] = find_t_element(waves_peak.get("ECG_T_Peaks"), rpeak)
+    peak_dic["t_offset"] = find_t_element(waves_peak.get("ECG_T_Offsets"), rpeak)
+
+    if None in peak_dic.values():
+        return None
+    # 2. Assemble the full set
+    start_idx = rpeak - 150
+    print(f"p_onset: {peak_dic['p_onset']}")
+    print(f"type of p_onset: {type(peak_dic['p_onset'])}")
+    peak_dic["p_onset"] = peak_dic["p_onset"] - start_idx
+    peak_dic["p_peak"] = peak_dic["p_peak"] - start_idx
+    peak_dic["p_offset"] = peak_dic["p_offset"] - start_idx
+    peak_dic["q_peak"] = peak_dic["q_peak"] - start_idx
+    peak_dic["s_peak"] = peak_dic["s_peak"] - start_idx
+    peak_dic["t_onset"] = peak_dic["t_onset"] - start_idx
+    peak_dic["t_peak"] = peak_dic["t_peak"] - start_idx
+    peak_dic["t_offset"] = peak_dic["t_offset"] - start_idx
+
+    pqrst_points = [
+        peak_dic["p_onset"],
+        peak_dic["p_peak"],
+        peak_dic["p_offset"],
+        peak_dic["q_peak"],
+        peak_dic["s_peak"],
+        peak_dic["t_onset"],
+        peak_dic["t_peak"],
+        peak_dic["t_offset"],
+    ]
+    print(f"pqrst_points: {pqrst_points}")
+
+    # 3. Validate the set
+    # 3a. Check for chronological order (is_ascending handles None/NaN)
+    if not is_ascending(pqrst_points):
+        return None
+
+    # R波ピークを挿入
+    pqrst_points.insert(4, rpeak)  # R-peak is always at index 150 in the cut segment
+
+    return pqrst_points
+
+
 def main(args):
     dir_path = args.raw_datas_dir
     csv_reader_16ch = CSVReader_16ch(dir_path)
@@ -188,6 +340,52 @@ def main(args):
     # print(sc_12ch)
     # input()
     peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
+
+    # --- START OF PRE-COMPUTATION FOR AUTO-DELINEATION ---
+    all_prt_points = None
+    if args.manual_setting == "3":
+        print(
+            "--- Mode 3: Performing one-time automatic PQRST delineation on the full signal ---"
+        )
+        try:
+            full_ecg_signal = df_12ch_cleaned[TARGET_CHANNEL_12CH].to_numpy()
+
+            # 1. Detect R-peaks using the 'neurokit' method
+            _, rpeaks_info = nk.ecg_peaks(
+                full_ecg_signal, sampling_rate=RATE, method="neurokit"
+            )
+
+            # 2. Perform delineation using the 'peak' method to get all potential wave points
+            _, waves_peak = nk.ecg_delineate(
+                full_ecg_signal,
+                rpeaks_info,
+                sampling_rate=RATE,
+                method="cwt",
+            )
+
+            all_prt_points = []
+
+            # 3. For each R-peak, find and validate the complete PQRST set
+            for rpeak in rpeaks_info["ECG_R_Peaks"]:
+                valid_pqrst_set = find_valid_pqrst_set(
+                    waves_peak, rpeak, RATE, args.time_range
+                )
+                print(f"valid_pqrst_set for rpeak {rpeak}: {valid_pqrst_set}")
+                if valid_pqrst_set is not None:
+                    all_prt_points.append(valid_pqrst_set)
+
+            print(
+                f"  > Successfully validated and retained {len(all_prt_points)} heartbeats."
+            )
+
+        except Exception as e:
+            print(
+                f"  > CRITICAL: One-time automatic delineation failed: {e}. Cannot proceed in mode 3."
+            )
+            # Set to None so the loop knows to skip
+            all_prt_points = None
+    # --- END OF PRE-COMPUTATION ---
+
     # --- START OF HEARTBEAT PROCESSING LOGIC ---
     if args.enable_averaging:
         # --- Averaging Mode ---
@@ -232,7 +430,15 @@ def main(args):
             )
 
             # 3. Select the representative 12ch heartbeat (the first one in the group)
-            representative_sc12 = sc_12ch[0].iloc[grouped_dataset_idx]
+            representative_beat_index = grouped_dataset_idx
+            if representative_beat_index >= len(sc_12ch[0]):
+                print(
+                    "  > Not enough 12ch R-peaks to match this group. Ending processing."
+                )
+                break
+            representative_sc12 = sc_12ch[0].iloc[representative_beat_index]
+            print(f"Representative beat index: {representative_beat_index}")
+            # time.sleep(5)
             center_12ch_idx = int(representative_sc12 * RATE)
             start_12ch_idx = int(center_12ch_idx - 0.3 * RATE)
             end_12ch_idx = int(center_12ch_idx + 0.5 * RATE)
@@ -341,32 +547,32 @@ def main(args):
                 else:
                     skip_heartbeat = True
             elif args.manual_setting == "3":
-                try:
-                    prt_eles = PTwave_search3(
-                        ecg_A2=heartbeat_12ch[TARGET_CHANNEL_12CH].to_numpy().T,
-                        header=TARGET_CHANNEL_12CH,
-                        sampling_rate=RATE,
-                        args=args,
-                        time_length=args.time_range,
-                        method=args.peak_method,
-                    )
-                    if prt_eles is not None and len(prt_eles) > 0:
+                print(f"all_prt_points: {all_prt_points}")
+                print(f"representative_beat_index: {representative_beat_index}")
+                if all_prt_points is not None and representative_beat_index < len(
+                    all_prt_points
+                ):
+                    points = all_prt_points[representative_beat_index]
+                    if any(pd.isna(p) for p in points):
+                        print(
+                            f"  > Warning: Incomplete (NaN) delineation for representative heartbeat {representative_beat_index}. Skipping group."
+                        )
+                        skip_heartbeat = True
+                    else:
                         (
                             p_onset,
-                            t_offset,
-                            p_offset,
-                            t_onset,
-                            r_peak,
                             p_peak,
+                            p_offset,
                             q_peak,
+                            r_peak,
                             s_peak,
+                            t_onset,
                             t_peak,
-                        ) = prt_eles[0]
-                    else:
-                        skip_heartbeat = True
-                except Exception as e:
+                            t_offset,
+                        ) = points
+                else:
                     print(
-                        f"  > Warning: Auto detection failed. Skipping group. Error: {e}"
+                        f"  > Warning: No pre-computed delineation available for representative heartbeat {representative_beat_index}. Skipping group."
                     )
                     skip_heartbeat = True
 
@@ -388,6 +594,7 @@ def main(args):
                     )
                     # pt_extendを実施
                     # インデックスp_onsetの値を取得
+                    print(f"p_onset: {p_onset}, t_offset: {t_offset}")
                     value_at_p_onset = data.iloc[p_onset, j]
                     # インデックスt_offsetの値を取得
                     value_at_t_offset = data.iloc[t_offset, j]
@@ -418,6 +625,7 @@ def main(args):
 
                     # 2. 基線として使用する4つの領域のデータ点を準備
                     print(p_onset, t_offset)
+                    print(points)
                     indices_1 = np.arange(0, p_onset)
                     values_1 = signal[:p_onset]
                     # indices_2 = np.arange(p_offset, qrs_onset)
@@ -433,7 +641,9 @@ def main(args):
                     print(len(signal))
 
                     # 3. 多項式フィッティングを実行
-                    if len(baseline_indices) > 2:
+                    if len(baseline_indices) > 2 and len(baseline_values) == len(
+                        baseline_indices
+                    ):
                         poly_degree = 6
                         print("baseline_indices", len(baseline_indices))
                         print("baseline_values", len(baseline_values))
@@ -583,31 +793,44 @@ def main(args):
                 else:
                     skip_heartbeat = True
             elif args.manual_setting == "3":
-                try:
-                    prt_eles = PTwave_search3(
-                        ecg_A2=heartbeat_12ch[TARGET_CHANNEL_12CH].to_numpy().T,
-                        header=TARGET_CHANNEL_12CH,
-                        sampling_rate=RATE,
-                        args=args,
-                        time_length=args.time_range,
-                        method=args.peak_method,
-                    )
-                    if prt_eles is not None and len(prt_eles) > 0:
+                if all_prt_points is not None and i < len(all_prt_points):
+                    points = all_prt_points[i]
+                    # Check for NaN values from neurokit which indicate failed delineation for a point
+                    if any(pd.isna(p) for p in points):
+                        print(
+                            f"  > Warning: Incomplete (NaN) delineation for heartbeat {i}. Skipping."
+                        )
+                        skip_heartbeat = True
+                    else:
+                        (
+                            p_onset_abs,
+                            p_peak_abs,
+                            p_offset_abs,
+                            q_peak_abs,
+                            r_peak_abs,
+                            s_peak_abs,
+                            t_onset_abs,
+                            t_peak_abs,
+                            t_offset_abs,
+                        ) = points
+                        # Convert absolute indices to relative indices for the current heartbeat window
                         (
                             p_onset,
-                            t_offset,
-                            p_offset,
-                            t_onset,
-                            r_peak,
                             p_peak,
+                            p_offset,
                             q_peak,
+                            r_peak,
                             s_peak,
+                            t_onset,
                             t_peak,
-                        ) = prt_eles[0]
-                    else:
-                        skip_heartbeat = True
-                except Exception as e:
+                            t_offset,
+                        ) = [int(p) - start_12ch_idx for p in points]
+                else:
+                    print(
+                        f"  > Warning: No pre-computed delineation available for heartbeat {i}. Skipping."
+                    )
                     skip_heartbeat = True
+
             else:
                 skip_heartbeat = True
 
@@ -768,7 +991,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--manual_setting",
         type=str,
-        default="2",
+        default="3",
         help="PQRST detection mode: 1=Manual, 2=File, 3=Auto",
     )
     parser.add_argument(
@@ -777,7 +1000,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--average_beats_num",
         type=int,
-        default=10,
+        default=1,
         help="Number of heartbeats to average.",
     )
     args = parser.parse_args()
@@ -785,7 +1008,7 @@ if __name__ == "__main__":
     args.peak_method = (
         "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
     )
-    args.pos = "0"
+    args.pos = "center_1"
     args.type = ""
     args.dir_name = "{}/{}".format(args.name, args.type)
     args.png_path = ""
@@ -795,7 +1018,7 @@ if __name__ == "__main__":
     )
     args.TARGET_CHANNEL_12CH = "A2"
     args.cut_min_max_range = [1.0, 100.0]
-    args.reverse = "on"
+    args.reverse = "off"
     args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
     args.dir_name = "{}/{}".format(args.name, args.type)
     # args.project_path='/home/cs28/share/goto/goto/ecg_project'

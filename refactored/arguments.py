@@ -9,7 +9,7 @@ import datetime
 
 def get_args():
     current_time = datetime.date.today().strftime(
-        "CNN_grid_search%Y%m%d%H_15ch_arrange_direction"
+        "unet_mse%Y%m%d%H_15ch_arrange_direction_for_thesis"
     )
     datalength = int(RATE * 0.8)
 
@@ -29,10 +29,10 @@ def get_args():
     parser.add_argument("--TARGET_NAME", type=str, default="")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=500)
-    parser.add_argument("--train_batch_size", type=int, default=4)
+    parser.add_argument("--train_batch_size", type=int, default=32)
     parser.add_argument("--test_batch_size", type=int, default=1)
     parser.add_argument("--val_batch_size", type=int, default=1)
-    parser.add_argument("--learning_rate", type=float, default=0.0005)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--datalength", type=int, default=datalength)
     parser.add_argument(
         "--enc_convlayer_sizes",
@@ -55,14 +55,14 @@ def get_args():
     parser.add_argument("--pth", type=str, default=r"vae_prt_sep.pth")
     parser.add_argument("--mode", type=str, default="train")
     parser.add_argument("--loss_fn_type", type=str, default="mse")
-    parser.add_argument("--beta", type=int, default=1)
+    parser.add_argument("--beta", type=float, default=1.0)
     parser.add_argument("--alpha", type=int, default=1000)
     parser.add_argument("--transform_type", type=str, default="normal")
     parser.add_argument("--current_time", type=str, default=current_time)
     parser.add_argument("--ecg_ch_num", type=int, default=8)
     parser.add_argument("--num_channels", type=int, default=15)
     parser.add_argument("--orientation", type=str, default="normal")
-    parser.add_argument("--ave_data_flg", type=int, default=0)
+    parser.add_argument("--ave_data_flg", type=int, default=1)
 
     # Model-specific hyperparameters
     parser.add_argument("--base_filters", type=int, default=32)
@@ -82,11 +82,26 @@ def get_args():
         default=8,
         help="Initial filter size for SimpleCNN",
     )
+
+    # GNN specific
+    parser.add_argument(
+        "--rnn_hidden_size",
+        type=int,
+        default=64,
+        help="Hidden size for the RNN encoder in GNN model.",
+    )
+    parser.add_argument(
+        "--gnn_hidden_size",
+        type=int,
+        default=64,
+        help="Hidden size for the GCN mixer in GNN model.",
+    )
+
     parser.add_argument(
         "--model_type",
         type=str,
         required=False,
-        help="Model type to train (e.g., cnn, cnn_lstm, unet, lstm)",
+        help="Model type to train (e.g., cnn, cnn_lstm, unet, lstm, gnn_reconstruction)",
     )
 
     args = parser.parse_args()

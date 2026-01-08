@@ -208,7 +208,7 @@ def test_cnn(model, test_loader, device, args, exp_dir):
     }
     output_file = os.path.join(
         args.mae_folder,
-        f"MAE_leave_1_out_{args.Dataset_name}_SimpleCNN_augumentation={args.p_augumentation}.csv",
+        f"MAE_leave_1_out_{args.Dataset_name}_SimpleCNN.csv",
     )
     utils.write_to_csv(output_file, data=data_to_write)
 
@@ -237,10 +237,9 @@ def main():
 
     train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
         TARGET_NAME=args.TARGET_NAME,
-        transform_type=args.transform_type,
         Dataset_name=args.Dataset_name,
         dataset_num=args.dataset_num,
-        DataAugumentation=args.p_augumentation,
+        DataAugmentation=args.DataAugmentation,
         ave_data_flg=args.ave_data_flg,
         num_channels=args.num_channels,
     )
@@ -275,7 +274,7 @@ def main():
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
         scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=20, T_mult=2)
-        criterion = utils.loss_fn_unet  # Using U-Net loss as a default
+        criterion = utils.loss_fn_mse_and_corr  # Using U-Net loss as a default
 
         print("Training SimpleCNN Model...")
         train_cnn(

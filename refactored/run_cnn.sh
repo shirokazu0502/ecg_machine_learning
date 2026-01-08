@@ -34,9 +34,8 @@ for target_name in "${TARGET_NAMES[@]}"; do
         --train_batch_size 16 \
         --num_channels 15 \
         --ecg_ch_num 8 \
-        --p_augumentation normal \
         --cnn_depth 4 \
-        --cnn_init_filters 32
+        --cnn_init_filters 16
 
     echo "Running SimpleCNN testing for TARGET_NAME: ${target_name}"
 
@@ -47,9 +46,8 @@ for target_name in "${TARGET_NAMES[@]}"; do
         --TARGET_NAME "${target_name}" \
         --num_channels 15 \
         --ecg_ch_num 8 \
-        --p_augumentation normal \
         --cnn_depth 4 \
-        --cnn_init_filters 32
+        --cnn_init_filters 16
 
 done
 

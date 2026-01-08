@@ -64,6 +64,8 @@ def test_lstm(model, test_loader, device, args, exp_dir):
     test_val_all_rmse = []
     test_val_12ch_all_rmse = []
     pearson_scores = []
+    relative_roughness_scores = []
+    pearson_per_channel_scores = [[] for _ in range(args.ecg_ch_num)]
     datalength = args.datalength
     ecg_ch = args.ecg_ch_num
     if ecg_ch == 8:
@@ -126,16 +128,28 @@ def test_lstm(model, test_loader, device, args, exp_dir):
             test_val_12ch_rmse = test_val_12ch_rmse.reshape(-1, args.ecg_ch_num)
             test_val_12ch_all_rmse += test_val_12ch_rmse.tolist()
 
-            recon_x_np = (
+            recon_x_np_flat = (
                 recon_x.reshape(-1, datalength).cpu().numpy().astype(np.float64)
             )
-            xo_np = xo.reshape(-1, datalength).cpu().numpy().astype(np.float64)
+            xo_np_flat = xo.reshape(-1, datalength).cpu().numpy().astype(np.float64)
 
             r, _ = utils.pearsonr(
-                recon_x_np.ravel(),
-                xo_np.ravel(),
+                recon_x_np_flat.ravel(),
+                xo_np_flat.ravel(),
             )
             pearson_scores.append(r)
+
+            recon_x_np_ch = recon_x.cpu().numpy().astype(np.float64)
+            xo_np_ch = xo.cpu().numpy().astype(np.float64)
+            for p_batch in range(recon_x_np_ch.shape[0]):
+                for q_ch in range(ecg_ch):
+                    r_ch, _ = utils.pearsonr(
+                        recon_x_np_ch[p_batch, q_ch, :], xo_np_ch[p_batch, q_ch, :]
+                    )
+                    pearson_per_channel_scores[q_ch].append(r_ch)
+
+            relative_roughness = utils.calculate_relative_roughness(recon_x, xo)
+            relative_roughness_scores.append(relative_roughness)
 
             batch_size_now = xo.shape[0]
 
@@ -182,6 +196,8 @@ def test_lstm(model, test_loader, device, args, exp_dir):
         test_val_all_rmse,
         test_val_12ch_all_rmse,
         pearson_scores,
+        relative_roughness_scores,
+        pearson_per_channel_scores,
     )
 
 
@@ -204,10 +220,9 @@ def main():
 
     train_dataset, test_dataset = Dataset.Dataset_setup_8ch_pt_augmentation(
         TARGET_NAME=args.TARGET_NAME,
-        transform_type=args.transform_type,
         Dataset_name=args.Dataset_name,
         dataset_num=args.dataset_num,
-        DataAugumentation=args.p_augumentation,
+        DataAugmentation=args.DataAugmentation,
         ave_data_flg=args.ave_data_flg,
         num_channels=args.num_channels,
     )
@@ -216,14 +231,12 @@ def main():
         datetime.datetime.fromtimestamp(time.time()).strftime("%Y%m%d_%H%M%S")
         + "_Dataset_name="
         + args.Dataset_name
-        + "_transform_type="
-        + args.transform_type
         + "_"
         + args.mode
         + "_TARGETNAME="
         + str(args.TARGET_NAME)
-        + "_loss_pt_on_off="
-        + args.loss_pt_on_off
+        + "_augumentation="
+        + args.DataAugmentation
     )
 
     exp_dir = os.path.join(args.fig_root, str(ts))
@@ -302,13 +315,20 @@ def main():
             test_val_all_rmse,
             test_val_12ch_all_rmse,
             pearson_scores,
+            relative_roughness_scores,
+            pearson_per_channel_scores,
         ) = test_lstm(lstm_model, test_loader, device, args, exp_dir)
 
         test_val_all_mae = np.array(test_val_all_mae)
         test_val_mean_mae = np.mean(test_val_all_mae)
         test_val_12ch_all_mae = np.array(test_val_12ch_all_mae)
         test_val_12ch_mean_mae = np.mean(test_val_12ch_all_mae, axis=0)
-        pearson_score = np.mean(pearson_scores)
+        pearson_all_score = np.mean(pearson_scores)
+        mean_relative_roughness = np.mean(relative_roughness_scores)
+        mean_pearson_per_channel = [
+            np.mean(scores) if scores else np.nan
+            for scores in pearson_per_channel_scores
+        ]
 
         test_val_all_rmse = np.array(test_val_all_rmse)
         test_val_rmse_mean = np.mean(test_val_all_rmse)
@@ -338,18 +358,22 @@ def main():
             "RMSE_V4": test_val_12ch_rmse_mean[5],
             "RMSE_V5": test_val_12ch_rmse_mean[6],
             "RMSE_V6": test_val_12ch_rmse_mean[7],
-            "pearson_score": pearson_score,
+            "pearson_all": pearson_all_score,
+            "pearson_A1": mean_pearson_per_channel[0],
+            "pearson_A2": mean_pearson_per_channel[1],
+            "pearson_V1": mean_pearson_per_channel[2],
+            "pearson_V2": mean_pearson_per_channel[3],
+            "pearson_V3": mean_pearson_per_channel[4],
+            "pearson_V4": mean_pearson_per_channel[5],
+            "pearson_V5": mean_pearson_per_channel[6],
+            "pearson_V6": mean_pearson_per_channel[7],
+            "Relative_Roughness": mean_relative_roughness,
         }
         output_file = os.path.join(
             args.mae_folder
-            + "/MAE_leave_1_out_{}_PRTweight_{}_{}_{}_augumentation={}.csv".format(
+            + "/MAE_leave_1_out_{}_augumentation={}.csv".format(
                 args.Dataset_name,
-                str(args.loss_pt_on_off_P_weight),
-                str(args.loss_pt_on_off_R_weight),
-                str(args.loss_pt_on_off_T_weight),
-                args.p_augumentation,
-                args.r_augumentation,
-                args.t_augumentation,
+                args.DataAugmentation,
             )
         )
         utils.write_to_csv(output_file, data=data_to_write)

@@ -14,6 +14,7 @@ for name in "${TARGET_NAMES[@]}"; do
         --train_batch_size 16 \
         --num_channels 15 \
         --ave_data_flg 1 \
+        --DataAugmentation "st_warp,t_height" \
         --cnn_filters_1 32 \
         --cnn_filters_2 64 \
         --cnn_kernel_size 5 \

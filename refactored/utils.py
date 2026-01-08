@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import sys
@@ -164,11 +165,122 @@ def pearson_corr_loss_like_scipy(recon_x, x):
     return torch.mean(torch.stack(losses))
 
 
-def loss_fn_unet(recon_x, x, beta=0.8):
+def loss_fn_mse(recon_x, x):
+    criterion_mse = torch.nn.MSELoss(reduction="mean")
+    mse_loss = criterion_mse(recon_x, x)
+    print(f"mse_loss: {mse_loss.item()}")
+    return mse_loss
+
+
+def loss_fn_mse_and_corr(recon_x, x, beta=0.2):
     criterion_mse = torch.nn.MSELoss(reduction="mean")
     mse_loss = criterion_mse(recon_x, x)
     corr_loss = pearson_corr_loss_like_scipy(recon_x, x)
-    return mse_loss + beta * corr_loss
+    # --- NEW: Scale by order of magnitude (powers of 10) ---
+    with torch.no_grad():
+        epsilon = 1e-12  # To prevent log10(0) for very small losses
+        # Get Python scalar values for log10 calculation
+        mse_item = mse_loss.item()
+        corr_item = corr_loss.item()
+        # Calculate order of magnitude for each loss
+        order_mse = math.floor(math.log10(mse_item + epsilon))
+        order_corr = math.floor(math.log10(corr_item + epsilon))
+        # Calculate the difference in order of magnitude
+        order_diff = order_mse - order_corr
+        # The scaling factor is 10 to the power of the difference
+        scaling_factor = 10.0**order_diff
+    # Apply the quantized scaling factor
+    scaled_corr_loss = corr_loss * scaling_factor
+    combined_loss = mse_loss + beta * scaled_corr_loss
+    return combined_loss
+
+
+def loss_fn_weighted_mse_and_corr(recon_x, x, pt_index, beta, weight_r, weight_other):
+    """
+    Calculates a combined loss of weighted MSE and scaled Pearson correlation.
+    The MSE is weighted differently for the R-wave segment vs. other segments.
+    """
+    # 1. Calculate Raw Pearson Correlation Loss
+    raw_corr_loss = pearson_corr_loss_like_scipy(recon_x, x)
+
+    # 2. Calculate Weighted MSE
+    batch_size, num_channels, datalength = x.shape
+    total_weighted_mse = torch.tensor(0.0, device=x.device)
+
+    mse_func_sum = torch.nn.MSELoss(
+        reduction="sum"
+    )  # Use sum reduction for per-sample MSE
+
+    for i in range(batch_size):
+        # pt_index: [P_onset, P_offset, QRS_onset, QRS_offset, T_onset, T_offset, heart_rate, heart_rate_variability]
+        # We need QRS_onset (index 2) and QRS_offset (index 3)
+        # pt_index is (batch_size, 8)
+        qrs_onset = int(pt_index[i, 2].item())
+        qrs_offset = int(pt_index[i, 3].item())
+
+        # Ensure indices are within bounds
+        if qrs_onset < 0:
+            qrs_onset = 0
+        if qrs_offset > datalength:
+            qrs_offset = datalength
+
+        # Handle cases where QRS is invalid or too short
+        if qrs_onset >= qrs_offset:
+            # Fall back to unweighted MSE for this sample if R-wave segment is invalid
+            total_weighted_mse += mse_func_sum(recon_x[i], x[i])
+            continue
+
+        # Extract R-wave segment and other segments
+        recon_r = recon_x[i, :, qrs_onset:qrs_offset]
+        target_r = x[i, :, qrs_onset:qrs_offset]
+
+        # Concatenate non-R-wave segments
+        # Handle cases where segments before or after QRS might be empty
+        recon_other_parts = []
+        target_other_parts = []
+
+        if qrs_onset > 0:
+            recon_other_parts.append(recon_x[i, :, :qrs_onset])
+            target_other_parts.append(x[i, :, :qrs_onset])
+
+        if qrs_offset < datalength:
+            recon_other_parts.append(recon_x[i, :, qrs_offset:])
+            target_other_parts.append(x[i, :, qrs_offset:])
+
+        if (
+            not recon_other_parts
+        ):  # If no 'other' parts (e.g., R-wave covers entire segment)
+            mse_other = torch.tensor(0.0, device=x.device)
+        else:
+            recon_other = torch.cat(recon_other_parts, dim=1)
+            target_other = torch.cat(target_other_parts, dim=1)
+            mse_other = mse_func_sum(recon_other, target_other)
+
+        # Calculate MSE for R-wave segment
+        mse_r = mse_func_sum(recon_r, target_r)
+
+        # Apply individual weights and sum for this sample
+        weighted_mse_sample = (weight_r * mse_r) + (weight_other * mse_other)
+        total_weighted_mse += weighted_mse_sample
+
+    # Average the weighted MSE over the batch and normalize by total elements
+    # mse_func_sum calculates sum of squared diff, need to divide by num_elements
+    weighted_mse_loss = total_weighted_mse / (batch_size * num_channels * datalength)
+
+    # 3. Scale Raw Pearson Correlation Loss to match Weighted MSE order
+    with torch.no_grad():
+        epsilon = 1e-12
+        order_mse = math.floor(math.log10(weighted_mse_loss.item() + epsilon))
+        order_corr = math.floor(math.log10(raw_corr_loss.item() + epsilon))
+        order_diff = order_mse - order_corr
+        scaling_factor = 10.0**order_diff
+
+    scaled_corr_loss = raw_corr_loss * scaling_factor
+
+    # 4. Combine the weighted MSE and scaled Pearson correlation loss
+    combined_loss = weighted_mse_loss + beta * scaled_corr_loss
+
+    return combined_loss
 
 
 def loss_fn_mse_PRT(
@@ -207,6 +319,30 @@ def loss_fn_mse_PRT(
         alpha * MSE_loss,
         beta * KLD / batch_size,
     )
+
+
+def loss_fn_mse_kld(recon_x, x, mean, log_var, datalength, args):
+    batch_size = x.shape[0]
+    # print(x.shape)
+    # print(recon_x.shape)
+    # MSE=torch.nn.MSELoss(reduction="sum")#reducitonをsumにしていた。これはミニバッチの全ての要素の二乗誤差の和。meanのときの要素数倍になる。
+    MSE = torch.nn.MSELoss(reduction="mean")
+    MSE_loss = MSE(
+        recon_x.view(-1, datalength), x.view(-1, datalength)
+    )  # ミニバッチ内全てで平均。ミニバッチ内のそれぞれのデータの形状が同じ
+    KLD = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
+    alpha = args.alpha
+    beta = args.beta
+    # print(MSE_loss)
+    # # print("pure_MSE")
+    # KLD=beta*KLD
+    # return (alpha*MSE_loss + beta*KLD) / batch_size, MSE_loss/batch_size, KLD/batch_size
+    return (
+        alpha * MSE_loss + beta * KLD / batch_size,
+        MSE_loss / batch_size,
+        KLD / batch_size,
+    )  # MSEはreduction=meanで既にバッチで割られているからここではバッチ数で割らない
+    # return (alpha*MSE_loss + KLD) / x.size(0), MSE_loss/x.size(0), KLD/x.size(0)
 
 
 def noise_make(mean, scale, datanum, ch_num):
@@ -900,3 +1036,58 @@ def make_t_height_extation(PGV_datas, ECG_datas, pt_array, label_name, extation_
     )
     new_label_name = label_name + str(extation_rate)
     return new_ECG_data, new_PGV_data, new_label_name, pt_array
+
+
+def create_dynamic_adj(x_batch):
+    """
+    Computes a batch of dynamic adjacency matrices using Pearson correlation.
+
+    Args:
+        x_batch (torch.Tensor): Input time-series data with shape
+                                (batch_size, num_channels, sequence_length).
+
+    Returns:
+        torch.Tensor: Batch of adjacency matrices with shape
+                      (batch_size, num_channels, num_channels).
+                      Values are between -1 and 1.
+    """
+    batch_size, num_channels, sequence_length = x_batch.shape
+    adj_batch = torch.zeros(
+        batch_size, num_channels, num_channels, device=x_batch.device
+    )
+
+    for i in range(batch_size):
+        # Extract a single sample (num_channels, sequence_length)
+        sample = x_batch[i]
+
+        # Calculate Pearson correlation matrix for this sample
+        # Transpose to (sequence_length, num_channels) for torch.corrcoef
+        # Or, manually calculate since torch.corrcoef only works for 1D for now if no custom impl
+        # Let's use a manual calculation for clarity and direct control, similar to scipy's behavior
+
+        # Mean center the data
+        sample_mean = sample.mean(dim=1, keepdim=True)  # (num_channels, 1)
+        sample_centered = sample - sample_mean  # (num_channels, sequence_length)
+
+        # Calculate covariance matrix manually
+        # cov(X, Y) = E[(X-mu_X)(Y-mu_Y)]
+        # Sum of products for numerator
+        numerator = torch.matmul(
+            sample_centered, sample_centered.transpose(0, 1)
+        )  # (num_channels, num_channels)
+
+        # Denominator: product of standard deviations
+
+        # Add a stabilizing epsilon to prevent division by zero or near-zero
+
+        std_dev = torch.sqrt(torch.sum(sample_centered**2, dim=1, keepdim=True)) + 1e-8
+
+        denominator = torch.matmul(std_dev, std_dev.transpose(0, 1))
+
+        # Pearson correlation
+
+        correlation_matrix = numerator / denominator
+
+        adj_batch[i] = correlation_matrix
+
+    return adj_batch

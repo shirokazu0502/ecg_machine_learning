@@ -127,7 +127,7 @@ def individual_test_vae(
     return loss_keep
 
 
-def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
+def all_test_vae(test_loader, vae_dict, device, exp_dir, ecg_ch_names, args):
     vae_dict["P"].eval()
     vae_dict["R"].eval()
     vae_dict["T"].eval()
@@ -138,6 +138,8 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
     test_val_all_rmse = []
     test_val_12ch_all_rmse = []
     pearson_scores = []
+    relative_roughness_scores = []  # 追加
+    pearson_per_channel_scores = [[] for _ in range(args.ecg_ch_num)]  # 追加
     ecg_ch = args.ecg_ch_num
     datalength = args.datalength
 
@@ -222,10 +224,26 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
             test_val_12ch_rmse = test_val_12ch_rmse.reshape(-1, args.ecg_ch_num)
             test_val_12ch_all_rmse += test_val_12ch_rmse.tolist()
 
-            recon_x_np = recon_x.view(-1, datalength).cpu().numpy().astype(np.float64)
-            xo_np = xo.view(-1, datalength).cpu().numpy().astype(np.float64)
-            r, _ = utils.pearsonr(recon_x_np.ravel(), xo_np.ravel())
+            recon_x_np_flat = (
+                recon_x.view(-1, datalength).cpu().numpy().astype(np.float64)
+            )
+            xo_np_flat = xo.view(-1, datalength).cpu().numpy().astype(np.float64)
+            r, _ = utils.pearsonr(recon_x_np_flat.ravel(), xo_np_flat.ravel())
             pearson_scores.append(r)
+
+            # チャネルごとのピアソン相関を計算
+            recon_x_np_ch = recon_x.cpu().numpy().astype(np.float64)
+            xo_np_ch = xo.cpu().numpy().astype(np.float64)
+            for p_batch in range(recon_x_np_ch.shape[0]):
+                for q_ch in range(ecg_ch):
+                    r_ch, _ = utils.pearsonr(
+                        recon_x_np_ch[p_batch, q_ch, :], xo_np_ch[p_batch, q_ch, :]
+                    )
+                    pearson_per_channel_scores[q_ch].append(r_ch)
+
+            # 相対粗さの計算と追加
+            relative_roughness = utils.calculate_relative_roughness(recon_x, xo)
+            relative_roughness_scores.append(relative_roughness)
 
             batch_size_now = xo.shape[0]
 
@@ -233,7 +251,7 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
                 recon_x=recon_x,
                 xo=xo,
                 datalength=datalength,
-                ts=ts,
+                exp_dir=exp_dir,
                 args=args,
                 batch_size_num=batch_size_now,
                 label_name=label_name,
@@ -245,19 +263,23 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
             utils.save_csv2(
                 data=recon_x,
                 args=args,
-                ts=ts,
+                exp_dir=exp_dir,
                 label_name=label_name,
                 data_rec_or_xo="recon_x",
             )
             utils.save_csv2(
                 data=xo,
                 args=args,
-                ts=ts,
+                exp_dir=exp_dir,
                 label_name=label_name,
                 data_rec_or_xo="xo",
             )
 
-    pearson_score = sum(pearson_scores) / len(pearson_scores)
+    pearson_all_score = sum(pearson_scores) / len(pearson_scores)
+    mean_relative_roughness = np.mean(relative_roughness_scores)
+    mean_pearson_per_channel = [
+        np.mean(scores) if scores else np.nan for scores in pearson_per_channel_scores
+    ]
 
     test_val_all = np.array(test_val_all)
     test_val_mean = np.mean(test_val_all)
@@ -289,7 +311,16 @@ def all_test_vae(test_loader, vae_dict, device, ts, ecg_ch_names, args):
         "RMSE_V4": test_val_12ch_rmse_mean[5],
         "RMSE_V5": test_val_12ch_rmse_mean[6],
         "RMSE_V6": test_val_12ch_rmse_mean[7],
-        "pearson_score": pearson_score,
+        "pearson_all": pearson_all_score,
+        "pearson_A1": mean_pearson_per_channel[0],
+        "pearson_A2": mean_pearson_per_channel[1],
+        "pearson_V1": mean_pearson_per_channel[2],
+        "pearson_V2": mean_pearson_per_channel[3],
+        "pearson_V3": mean_pearson_per_channel[4],
+        "pearson_V4": mean_pearson_per_channel[5],
+        "pearson_V5": mean_pearson_per_channel[6],
+        "pearson_V6": mean_pearson_per_channel[7],
+        "Relative_Roughness": mean_relative_roughness,
     }
     return data_to_write
 
@@ -329,9 +360,9 @@ def main():
         dataset_setup_fn = Dataset.Dataset_setup_8ch_pt_augmentation
         dataset_args = {
             "TARGET_NAME": args.TARGET_NAME,
-            "transform_type": args.transform_type,
             "Dataset_name": args.Dataset_name,
             "dataset_num": args.dataset_num,
+            "DataAugmentation": args.DataAugmentation,
             "ave_data_flg": args.ave_data_flg,
             "datalength": args.datalength,
             "num_channels": args.num_channels,
@@ -340,9 +371,9 @@ def main():
         dataset_setup_fn = Dataset.Dataset_setup_virtual_9ch
         dataset_args = {
             "TARGET_NAME": args.TARGET_NAME,
-            "transform_type": args.transform_type,
             "Dataset_name": args.Dataset_name,
             "dataset_num": args.dataset_num,
+            "DataAugmentation": args.DataAugmentation,
             "ave_data_flg": args.ave_data_flg,
             "orientation": args.orientation,
             "datalength": args.datalength,
@@ -350,13 +381,13 @@ def main():
         }
 
     train_dataset_dict["P_train_dataset"], test_dataset_dict["P_test_dataset"] = (
-        dataset_setup_fn(**dataset_args, DataAugumentation=args.p_augumentation)
+        dataset_setup_fn(**dataset_args)
     )
     train_dataset_dict["R_train_dataset"], test_dataset_dict["R_test_dataset"] = (
-        dataset_setup_fn(**dataset_args, DataAugumentation=args.r_augumentation)
+        dataset_setup_fn(**dataset_args)
     )
     train_dataset_dict["T_train_dataset"], test_dataset_dict["T_test_dataset"] = (
-        dataset_setup_fn(**dataset_args, DataAugumentation=args.t_augumentation)
+        dataset_setup_fn(**dataset_args)
     )
     all_test_dataset = test_dataset_dict["R_test_dataset"]
 
@@ -377,16 +408,13 @@ def main():
         + "_loss_pt_on_off="
         + args.loss_pt_on_off
         + "_augument="
-        + args.p_augumentation
-        + "_"
-        + args.r_augumentation
-        + "_"
-        + args.t_augumentation
+        + args.DataAugmentation
     )
 
-    utils.create_directory_if_not_exists(os.path.join(args.fig_root, str(ts)))
+    exp_dir = os.path.join(args.fig_root, str(ts))
+    utils.create_directory_if_not_exists(exp_dir)
 
-    with open(os.path.join(args.fig_root, str(ts), "args.json"), mode="w") as f:
+    with open(os.path.join(exp_dir, "args.json"), mode="w") as f:
         json.dump(args.__dict__, f, indent=4)
 
     common_kwargs = {
@@ -484,7 +512,7 @@ def main():
                     loss.backward()
                     optimizer.step()
 
-                current_lr = scheduler.get_last_lr()[0]
+                current_lr = optimizer.param_groups[0]['lr']
 
                 print(
                     "Epoch {:02d}/{:02d} Batch {:04d}/{:d}, Loss {:9.4f}, Acc(mse) {:9.4f}, LR {:9.6f}".format(
@@ -518,7 +546,7 @@ def main():
                     test_loader,
                     vae,
                     device,
-                    ts,
+                    exp_dir,
                     [],
                     args,
                     None,
@@ -538,7 +566,7 @@ def main():
                 )
                 torch.save(
                     vae.state_dict(),
-                    os.path.join(args.fig_root, str(ts), "vae_pwave_weight.pth"),
+                    os.path.join(exp_dir, "vae_pwave_weight.pth"),
                 )
             elif target_weight == "R":
                 torch.save(
@@ -547,7 +575,7 @@ def main():
                 )
                 torch.save(
                     vae.state_dict(),
-                    os.path.join(args.fig_root, str(ts), "model_rwave_weight.pth"),
+                    os.path.join(exp_dir, "model_rwave_weight.pth"),
                 )
             elif target_weight == "T":
                 torch.save(
@@ -556,12 +584,12 @@ def main():
                 )
                 torch.save(
                     vae.state_dict(),
-                    os.path.join(args.fig_root, str(ts), "vae_twave_weight.pth"),
+                    os.path.join(exp_dir, "vae_twave_weight.pth"),
                 )
 
             vae_dict[target_weight] = vae
 
-        data_to_write = all_test_vae(test_loader, vae_dict, device, ts, [], args)
+        data_to_write = all_test_vae(test_loader, vae_dict, device, exp_dir, [], args)
         output_file = os.path.join(
             args.mae_folder
             + "/MAE_leave_1_out_{}_PRTweight_{}_{}_{}_augumentation={}.csv".format(
@@ -569,9 +597,7 @@ def main():
                 str(args.loss_pt_on_off_P_weight),
                 str(args.loss_pt_on_off_R_weight),
                 str(args.loss_pt_on_off_T_weight),
-                args.p_augumentation,
-                args.r_augumentation,
-                args.t_augumentation,
+                args.DataAugmentation,
             )
         )
         utils.write_to_csv(output_file, data=data_to_write)
@@ -580,7 +606,18 @@ def main():
     elif args.mode == "test":
         print("TEST MODE::\n")
         test_loader = DataLoader(all_test_dataset, batch_size=4, shuffle=False)
-        all_test_vae(test_loader, vae_dict, ts, [], args)
+        data_to_write = all_test_vae(test_loader, vae_dict, device, exp_dir, [], args)
+        output_file = os.path.join(
+            args.mae_folder
+            + "/MAE_leave_1_out_{}_PRTweight_{}_{}_{}_augumentation={}.csv".format(
+                args.Dataset_name,
+                str(args.loss_pt_on_off_P_weight),
+                str(args.loss_pt_on_off_R_weight),
+                str(args.loss_pt_on_off_T_weight),
+                args.DataAugmentation,
+            )
+        )
+        utils.write_to_csv(output_file, data=data_to_write)
 
 
 if __name__ == "__main__":
