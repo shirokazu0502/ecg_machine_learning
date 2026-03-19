@@ -14,7 +14,7 @@ from config.settings import RAW_DATA_DIR, OUTPUT_DIR
 
 process_flg = 0
 if process_flg == 0:
-    patient_datas_dir = RAW_DATA_DIR + "/patient_data/patient4/"
+    patient_datas_dir = RAW_DATA_DIR + "/patient_data/patient10/"
     # df = pd.read_csv(patient_datas_dir+"/db20240513_180746.csv",header=None)
     df = pd.read_csv(patient_datas_dir + "/AS_627158_lizmil.csv", header=None)
     # あるデータフレームの範囲を抽出する
@@ -25,7 +25,7 @@ if process_flg == 0:
     #     print("データを抽出しました。")
     extract_df = df[750400:750700]
     extract_df.to_csv(
-        RAW_DATA_DIR + "/patient_data/patient4/db_patient4_lizmil_data_AF.csv",
+        RAW_DATA_DIR + "/patient_data/patient10/db_patient10_lizmil_data_AF.csv",
         header=False,
         index=False,
     )

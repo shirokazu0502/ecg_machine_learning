@@ -14,15 +14,10 @@ PATIENTS=(
     "taniguchi 1107"
     "takahashi_jr 0512"
     "yoshikura 1130"
-    "patient2 1001"
-    "patient3 1001"
     "patient4 1001"
-    "patient5 1001"
     "patient6 1001"
-    "patient7 1109"
     "patient8 1109"
     "patient9 1109"
-    "patient10 1109"
 )
 
 for patient_info in "${PATIENTS[@]}"; do
@@ -31,9 +26,8 @@ for patient_info in "${PATIENTS[@]}"; do
     DATE=$(echo $patient_info | cut -d' ' -f2)
 
     # 出力先ディレクトリを作成
-    OUTPUT_DIR="/mnt/ecg_project/src/processed_data/best_resample/${NAME}_${DATE}"
-    mkdir -p $OUTPUT_DIR
+    OUTPUT_DIR="/mnt/ecg_project/data/processed_data/best_resample/${NAME}_${DATE}"
 
     # Pythonスクリプトを実行
-    python3 /mnt/ecg_project/src/dataset_creation/Make_dataset_0120_16ch_synchro_per_heart.py --name $NAME --date $DATE --output_filepath $OUTPUT_DIR
+    python3 /mnt/ecg_project/src_for_gemini_test/dataset_creation/Make_dataset_0120_16ch_synchro_per_heart.py --name $NAME --date $DATE --output_filepath $OUTPUT_DIR
 done

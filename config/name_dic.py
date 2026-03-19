@@ -17,7 +17,7 @@ NAME_DATE = {
     "asano": "0714",
     "togo": "1107",
     "takahashi_kazuya": "0516",
-    "nakanishi": "0407",
+    "nakanishi": "1210",
     "miyano": "0723",
     "gobara": "0512",
     "kinoshita": "0801",

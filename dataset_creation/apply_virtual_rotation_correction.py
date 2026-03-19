@@ -32,8 +32,10 @@ def get_sensor_coordinates(orientation="normal"):
             col = i // 4
             row = 3 - (i % 4)
         else:
-            raise ValueError("Invalid orientation specified. Use 'normal' or 'flipped'.")
-        
+            raise ValueError(
+                "Invalid orientation specified. Use 'normal' or 'flipped'."
+            )
+
         # coords key is 1-indexed
         coords[f"ch_{i+1}"] = (col, row)
     return coords
@@ -176,7 +178,7 @@ def apply_rotation_correction(df, axis_degrees, physical_sensor_coords):
 
     time_cols = [col for col in df_non_16ch.columns if "Time" in col]
     df_time = df_non_16ch[time_cols] if time_cols else pd.DataFrame(index=df.index)
-    df_12lead = df_non_16ch.drop(columns=time_cols, errors='ignore')
+    df_12lead = df_non_16ch.drop(columns=time_cols, errors="ignore")
 
     final_df = pd.concat([df_time, df_corrected_9ch, df_12lead], axis=1)
 
@@ -234,9 +236,7 @@ def main(args):
     print(f"Found cardiac axis for {subject_name}: {axis_degrees:.2f} degrees")
 
     # 2. Process the main dataset directory
-    process_directory(
-        args.data_dir, args.output_dir, axis_degrees, args.orientation
-    )
+    process_directory(args.data_dir, args.output_dir, axis_degrees, args.orientation)
 
     # 3. Process the moving_ave_datasets subdirectory if it exists
     moving_ave_dir = os.path.join(args.data_dir, "moving_ave_datasets")
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     # ##################################################################
     # #############  CONFIGURATION FOR THE SCRIPT RUN  ###############
     # ##################################################################
-    subject_name_full = "noda_0714_0.8s"
+    subject_name_full = "ikejima_0714_0.8s"
     args.orientation = "flipped"  # <--- CHANGE THIS: "normal" or "flipped"
     # ##################################################################
 
@@ -282,7 +282,14 @@ if __name__ == "__main__":
     args.data_dir = os.path.join(
         project_root, "data", "processed", "for_best_resample", subject_name_full, "0"
     )
-    args.axis_file = os.path.join(project_root, "data", "processed", "virtual_electrode_dataset", input_subject_dir, "virtual_axis.csv")
+    args.axis_file = os.path.join(
+        project_root,
+        "data",
+        "processed",
+        "virtual_electrode_dataset",
+        input_subject_dir,
+        "virtual_axis.csv",
+    )
     args.output_dir = os.path.join(
         project_root,
         "data",

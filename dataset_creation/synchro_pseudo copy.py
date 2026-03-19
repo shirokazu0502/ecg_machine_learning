@@ -1,0 +1,812 @@
+import os
+import time
+import argparse
+from Make_dataset_0120_16ch_synchro_per_heart import (
+    ecg_clean_df_16ch,
+    linear_interpolation_resample_All,
+    peak_sc,
+    peak_sc_16ch,
+    peak_sc_plot,
+    validate_integer_input,
+    CSVReader_16ch,
+    CSVReader_12ch,
+    ecg_clean_df_12ch,
+    PTwave_search3,
+    HeartbeatCutter_prt,
+    plot_and_select_all_points,
+    write_text_file,
+    create_directory_if_not_exists,
+    calculate_moving_average,
+    find_qrs_boundary,
+    create_15ch_variations,
+)
+from glob import glob
+from scipy import signal
+from scipy.ndimage import uniform_filter1d, median_filter
+import numpy as np
+import pandas as pd
+import neurokit2 as nk
+from config.settings import (
+    DATA_DIR,
+    BASE_DIR,
+    PROCESSED_DATA_DIR,
+    OUTPUT_DIR,
+    RAW_DATA_DIR,
+    TEST_DIR,
+    RATE,
+    RATE_15CH,
+    TIME,
+    DATASET_MADE_DATE,
+)
+from config.name_dic import select_name_and_date
+
+RATE = 500.00
+RATE_12ch = 500.00
+RATE_16ch = 122.06
+TARGET_CHANNEL_12CH = "A2"
+TARGET_CHANNEL_16ch = "ch_1"
+reverse = "on"
+
+
+def output_csv(file_path, file_name, data):
+    dt = 1.0 / RATE
+    time_tmp = np.arange(len(data)) * dt
+    # time_data=pd.DataFrame(time,column="Time")
+    time = pd.DataFrame()
+    time["Time"] = time_tmp
+    print(time)
+    data = data.reset_index(drop=True)
+    data_out = pd.concat([time, data], axis=1)
+    print(data_out)
+    data_out.to_csv(file_path + "/" + file_name, index=None)
+
+
+def output_csv_eles(
+    file_path,
+    file_name,
+    p_onset,
+    t_offset,
+    p_offset,
+    t_onset,
+    r_peak,
+    p_peak,
+    q_peak,
+    s_peak,
+    t_peak,
+):
+    data = {
+        "p_onset": [p_onset],
+        "t_offset": [t_offset],
+        "p_offset": [p_offset],
+        "t_onset": [t_onset],
+        "r_peak": [r_peak],
+        "p_peak": [p_peak],
+        "q_peak": [q_peak],
+        "s_peak": [s_peak],
+        "t_peak": [t_peak],
+    }
+    data_out = pd.DataFrame(data)
+    data_out.to_csv(file_path + "/" + file_name, index=None)
+
+
+def normalize_data(df):
+    """
+    Finds the global maximum absolute value across all data and scales
+    the entire dataframe to the [0, 1] range.
+    """
+    global_max_val = df.abs().max().max()
+    if global_max_val > 0:
+        normalized_df = 0.5 * (df / global_max_val) + 0.5
+        return normalized_df
+    return df  # Return original df if max is 0 to avoid division by zero
+
+
+def clean_ecg_signal(
+    ecg_signal,
+    sampling_rate=500,
+    bandpass_lowcut=0.05,
+    bandpass_highcut=100,
+    notch_freq=50,
+    notch_Q=30,
+):
+    """
+    ECG信号をバンドパスフィルタとノッチフィルタで前処理する関数
+
+    Parameters:
+    ----------
+    ecg_signal : array-like
+        入力する生のECG信号
+    sampling_rate : int, optional
+        サンプリング周波数（Hz）
+    bandpass_lowcut : float, optional
+        バンドパスフィルタの下限周波数（Hz）
+    bandpass_highcut : float, optional
+        バンドパスフィルタの上限周波数（Hz）
+    notch_freq : float, optional
+        ノッチフィルタの中心周波数（Hz）
+    notch_Q : float, optional
+        ノッチフィルタのQ値（フィルタの鋭さ）
+
+    Returns:
+    -------
+    filtered_ecg : array-like
+        フィルタ後のECG信号
+    """
+
+    # --- バンドパスフィルタ ---
+    nyquist = sampling_rate / 2
+    low = bandpass_lowcut / nyquist
+    high = bandpass_highcut / nyquist
+
+    b_bandpass, a_bandpass = signal.butter(N=4, Wn=[low, high], btype="band")
+    filtered_ecg = signal.filtfilt(b_bandpass, a_bandpass, ecg_signal)
+
+    # --- ノッチフィルタ ---
+    w0 = notch_freq / nyquist
+    b_notch, a_notch = signal.iirnotch(w0=w0, Q=notch_Q)
+    filtered_ecg = signal.filtfilt(b_notch, a_notch, filtered_ecg)
+
+    return filtered_ecg
+
+
+def main(args):
+    dir_path = args.raw_datas_dir
+    csv_reader_16ch = CSVReader_16ch(dir_path)
+    print(dir_path)
+    df_16ch = csv_reader_16ch.process_files()
+    print(df_16ch)
+    # cols = df_15ch.columns
+    # df_15ch = pd.DataFrame()
+    # for col in cols:
+    #     df_15ch[col] = df_15ch[col] - df_15ch["ch_16"]
+    # df_15ch = df_15ch.drop(columns=["ch_16"])
+    df_16ch_cleaned = ecg_clean_df_16ch(df_16ch=df_16ch.copy(), rate=RATE_16ch)
+    df_resample_16ch = linear_interpolation_resample_All(
+        df=df_16ch_cleaned.copy(), sampling_rate=RATE_16ch, new_sampling_rate=RATE
+    )
+    df_16ch_cleaned = df_resample_16ch.copy()
+    csv_reader_12ch = CSVReader_12ch(dir_path)
+    df_12ch = csv_reader_12ch.process_files()
+    df_12ch_cleaned = ecg_clean_df_12ch(df_12ch)
+    if reverse == "off":
+        sc_16ch = peak_sc_16ch(
+            df_16ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+        )
+        peak_sc_plot(df_16ch_cleaned.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
+    else:
+        df_16ch_reverse = df_16ch_cleaned.copy()
+        df_16ch_reverse[TARGET_CHANNEL_16ch] = (-1) * df_16ch_cleaned.copy()[
+            TARGET_CHANNEL_16ch
+        ]
+        df_16ch_cleaned = df_16ch_reverse.copy()
+        sc_16ch = peak_sc_16ch(
+            df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch
+        )
+        peak_sc_plot(df_16ch_reverse.copy(), RATE=RATE, TARGET=TARGET_CHANNEL_16ch)
+        # 先頭は削除
+        sc_16ch = sc_16ch.drop(0)
+    sc_12ch = peak_sc(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
+    # print(sc_12ch)
+    # input()
+    peak_sc_plot(df_12ch.copy(), RATE=RATE_12ch, TARGET=TARGET_CHANNEL_12CH)
+    # --- START OF HEARTBEAT PROCESSING LOGIC ---
+    if args.enable_averaging:
+        # --- Averaging Mode ---
+        print(
+            f"--- Running in Averaging Mode (averaging {args.average_beats_num} beats) ---"
+        )
+        num_beats_total_16ch = len(sc_16ch[0])
+        grouped_dataset_idx = 0
+        for group_start in range(0, num_beats_total_16ch, args.average_beats_num):
+            group_end = group_start + args.average_beats_num
+            if group_end > num_beats_total_16ch:
+                print(
+                    f"  > Not enough beats for a group of {group_start}group. Ending processing."
+                )
+                break
+
+            print(
+                f"\n--- Processing group {grouped_dataset_idx+1} (heartbeats {group_start+1}-{group_end}) ---"
+            )
+
+            # 1. Cut all 16ch heartbeats in the group
+            beat_segments_16ch = []
+            for i in range(group_start, group_end):
+                center_16ch_idx = int(sc_16ch[0].iloc[i] * RATE)
+                start_16ch_idx_loop = int(center_16ch_idx - 0.3 * RATE)
+                end_16ch_idx_loop = int(center_16ch_idx + 0.5 * RATE)
+                heartbeat_16ch_segment = df_16ch_cleaned.iloc[
+                    start_16ch_idx_loop:end_16ch_idx_loop
+                ]
+                if len(heartbeat_16ch_segment) == 400:
+                    beat_segments_16ch.append(heartbeat_16ch_segment.values)
+
+            if not beat_segments_16ch:
+                print("  > No valid 16ch segments found in this group. Skipping.")
+                continue
+
+            # 2. Average the 16ch waveforms
+            stacked_beats_16ch = np.stack(beat_segments_16ch, axis=0)
+            averaged_beat_16ch_values = np.mean(stacked_beats_16ch, axis=0)
+            averaged_heartbeat_16ch = pd.DataFrame(
+                averaged_beat_16ch_values, columns=df_16ch_cleaned.columns
+            )
+
+            # 3. Select the representative 12ch heartbeat (the first one in the group)
+            representative_sc12 = sc_12ch[0].iloc[grouped_dataset_idx]
+            center_12ch_idx = int(representative_sc12 * RATE)
+            start_12ch_idx = int(center_12ch_idx - 0.3 * RATE)
+            end_12ch_idx = int(center_12ch_idx + 0.5 * RATE)
+            representative_heartbeat_12ch = df_12ch_cleaned.iloc[
+                start_12ch_idx:end_12ch_idx
+            ]
+
+            # 4. Merge and proceed
+            heartbeat_16ch = averaged_heartbeat_16ch.reset_index(drop=True)
+            heartbeat_12ch = representative_heartbeat_12ch.reset_index(drop=True)
+
+            # --- PQRST Point Determination, Correction, and Saving (for the group) ---
+            (
+                p_onset,
+                p_peak,
+                p_offset,
+                q_peak,
+                r_peak,
+                s_peak,
+                t_onset,
+                t_peak,
+                t_offset,
+            ) = (None,) * 9
+            skip_heartbeat = False
+            # (PQRST selection logic is applied to the representative 12-lead beat)
+            if args.manual_setting == "1":
+                window = int(0.4 * RATE)
+                print(
+                    f"  > Mode 1: Please select PQRST points for group {grouped_dataset_idx+1} on the plot..."
+                )
+                try:
+                    absolute_points = plot_and_select_all_points(
+                        df_12ch_cleaned,
+                        rpeak=center_12ch_idx,
+                        window=window,
+                    )
+                    (
+                        p_onset_abs,
+                        p_peak_abs,
+                        p_offset_abs,
+                        q_peak_abs,
+                        r_peak,
+                        s_peak_abs,
+                        t_onset_abs,
+                        t_peak_abs,
+                        t_offset_abs,
+                    ) = absolute_points
+                    (
+                        p_onset,
+                        p_peak,
+                        p_offset,
+                        q_peak,
+                        s_peak,
+                        t_onset,
+                        t_peak,
+                        t_offset,
+                    ) = [
+                        p - start_12ch_idx
+                        for p in [
+                            p_onset_abs,
+                            p_peak_abs,
+                            p_offset_abs,
+                            q_peak_abs,
+                            s_peak_abs,
+                            t_onset_abs,
+                            t_peak_abs,
+                            t_offset_abs,
+                        ]
+                    ]
+                except Exception as e:
+                    print(
+                        f"  > Warning: Could not manually select points. Skipping group. Error: {e}"
+                    )
+                    skip_heartbeat = True
+            elif args.manual_setting == "2":
+                file_path = os.path.join(args.dataset_output_path, args.output_filepath)
+                pt_filepath = os.path.join(
+                    file_path, f"ponset_toffset_{str(grouped_dataset_idx).zfill(3)}.csv"
+                )
+                if os.path.exists(pt_filepath):
+                    try:
+                        df_pt = pd.read_csv(pt_filepath)
+                        (
+                            p_onset,
+                            p_peak,
+                            p_offset,
+                            q_peak,
+                            r_peak,
+                            s_peak,
+                            t_onset,
+                            t_peak,
+                            t_offset,
+                        ) = (
+                            df_pt["p_onset"][0],
+                            df_pt["p_peak"][0],
+                            df_pt["p_offset"][0],
+                            df_pt["q_peak"][0],
+                            df_pt["r_peak"][0],
+                            df_pt["s_peak"][0],
+                            df_pt["t_onset"][0],
+                            df_pt["t_peak"][0],
+                            df_pt["t_offset"][0],
+                        )
+                    except Exception as e:
+                        skip_heartbeat = True
+                else:
+                    skip_heartbeat = True
+            elif args.manual_setting == "3":
+                try:
+                    print(heartbeat_12ch)
+                    # time.sleep(199)
+                    prt_eles = PTwave_search3(
+                        ecg_all=heartbeat_12ch,
+                        ecg_A2=heartbeat_12ch[TARGET_CHANNEL_12CH].to_numpy().T,
+                        header=TARGET_CHANNEL_12CH,
+                        sampling_rate=RATE,
+                        args=args,
+                        time_length=args.time_range,
+                        method=args.peak_method,
+                    )
+                    if prt_eles is not None and len(prt_eles) > 0:
+                        (
+                            p_onset,
+                            t_offset,
+                            p_offset,
+                            t_onset,
+                            r_peak,
+                            p_peak,
+                            q_peak,
+                            s_peak,
+                            t_peak,
+                        ) = prt_eles[0]
+                    else:
+                        skip_heartbeat = True
+                except Exception as e:
+                    print(
+                        f"  > Warning: Auto detection failed. Skipping group. Error: {e}"
+                    )
+                    skip_heartbeat = True
+
+            if not skip_heartbeat:
+                # --- Common Processing for the group ---
+                file_path = os.path.join(args.dataset_output_path, args.output_filepath)
+                create_directory_if_not_exists(file_path)
+                # 12chと16chそれぞれで正規化処理
+                heartbeat_16ch_normalized = normalize_data(heartbeat_16ch)
+                heartbeat_12ch_normalized = normalize_data(heartbeat_12ch)
+                merge_df = pd.concat(
+                    [heartbeat_16ch_normalized, heartbeat_12ch_normalized], axis=1
+                )
+                data = merge_df.copy()
+                for j, column in enumerate(data.columns):
+                    # フィルタかける
+                    data[column] = nk.ecg_clean(
+                        data[column], sampling_rate=500, method="neurokit"
+                    )
+                    # pt_extendを実施
+                    # インデックスp_onsetの値を取得
+                    value_at_p_onset = data.iloc[p_onset, j]
+                    # インデックスt_offsetの値を取得
+                    value_at_t_offset = data.iloc[t_offset, j]
+
+                    # p_onsetより前の値を置き換える
+                    data.iloc[:p_onset, j] = value_at_p_onset
+                    # t_offsetより後の値を置き換える
+                    data.iloc[t_offset:, j] = value_at_t_offset
+                    signal = data[column].copy().values
+
+                    # 0. PQ区間のノイズレベルを推定
+                    pq_region = signal[p_offset:q_peak]
+                    print("pq_region", pq_region)
+                    noise_level = (
+                        np.std(np.diff(pq_region)) if len(pq_region) > 1 else 0.1
+                    )
+
+                    # 1. QRS波の開始点と終了点を決定
+                    # 'onset'の呼び出し (変更なし)
+                    qrs_onset = find_qrs_boundary(
+                        "onset", signal, p_offset, q_peak, noise_level
+                    )
+
+                    # 'offset'の呼び出し (r_peakの代わりにs_peakを渡す)
+                    qrs_offset = find_qrs_boundary(
+                        "offset", signal, s_peak, t_onset, noise_level
+                    )
+
+                    # 2. 基線として使用する4つの領域のデータ点を準備
+                    print(p_onset, t_offset)
+                    indices_1 = np.arange(0, p_onset)
+                    values_1 = signal[:p_onset]
+                    # indices_2 = np.arange(p_offset, qrs_onset)
+                    # values_2 = signal[p_offset:qrs_onset]
+                    # indices_3 = np.arange(qrs_offset, t_onset)
+                    # values_3 = signal[qrs_offset:t_onset]
+                    indices_4 = np.arange(t_offset, len(signal))
+                    values_4 = signal[t_offset:]
+
+                    # 2つの領域をすべて結合
+                    baseline_indices = np.concatenate([indices_1, indices_4])
+                    baseline_values = np.concatenate([values_1, values_4])
+                    print(len(signal))
+
+                    # 3. 多項式フィッティングを実行
+                    if len(baseline_indices) > 2:
+                        poly_degree = 6
+                        print("baseline_indices", len(baseline_indices))
+                        print("baseline_values", len(baseline_values))
+                        print("len(poly_degree)", poly_degree)
+                        coeffs = np.polyfit(
+                            baseline_indices, baseline_values, poly_degree
+                        )
+                        x_full = np.arange(len(signal))
+                        baseline = np.polyval(coeffs, x_full)
+                        corrected_signal = signal - baseline
+                    else:
+                        corrected_signal = signal
+
+                    # 4. 結果をデータフレームに格納
+                    data[column] = corrected_signal
+
+                print(f"  > Saving dataset for group {grouped_dataset_idx + 1}...")
+                output_csv(
+                    file_name=f"dataset_{str(grouped_dataset_idx).zfill(3)}.csv",
+                    file_path=file_path,
+                    data=data,
+                )
+                output_csv_eles(
+                    file_name=f"ponset_toffset_{str(grouped_dataset_idx).zfill(3)}.csv",
+                    file_path=file_path,
+                    p_onset=p_onset,
+                    t_offset=t_offset,
+                    p_offset=p_offset,
+                    t_onset=t_onset,
+                    r_peak=r_peak,
+                    p_peak=p_peak,
+                    q_peak=q_peak,
+                    s_peak=s_peak,
+                    t_peak=t_peak,
+                )
+
+            grouped_dataset_idx += 1
+            if len(sc_12ch[0]) <= grouped_dataset_idx:
+                print(
+                    "  > No more 12ch beats available for selection. Ending processing."
+                )
+                break
+
+    else:
+        # --- Single-Beat Mode (Original Logic) ---
+        print("--- Running in Single-Beat Mode ---")
+        for i, (sc_16ch_peak, sc12) in enumerate(zip(sc_16ch[0], sc_12ch[0])):
+            center_16ch_idx = int(sc_16ch_peak * RATE)
+            start_16ch_idx = int(center_16ch_idx - 0.3 * RATE)
+            end_16ch_idx = int(center_16ch_idx + 0.5 * RATE)
+            heartbeat_16ch = df_16ch_cleaned.iloc[start_16ch_idx:end_16ch_idx]
+
+            center_12ch_idx = int(sc12 * RATE)
+            start_12ch_idx = int(center_12ch_idx - 0.3 * RATE)
+            end_12ch_idx = int(center_12ch_idx + 0.5 * RATE)
+            heartbeat_12ch = df_12ch_cleaned.iloc[start_12ch_idx:end_12ch_idx]
+
+            heartbeat_16ch = heartbeat_16ch.reset_index(drop=True)
+            heartbeat_12ch = heartbeat_12ch.reset_index(drop=True)
+
+            p_onset, p_peak, p_offset, q_peak, s_peak, t_onset, t_peak, t_offset = (
+                None,
+            ) * 8
+            skip_heartbeat = False
+
+            if args.manual_setting == "1":
+                window = int(0.4 * RATE)
+                print(
+                    f"  > Mode 1: Please select PQRST points for heartbeat {i+1} on the plot..."
+                )
+                try:
+                    absolute_points = plot_and_select_all_points(
+                        df_12ch_cleaned,
+                        rpeak=center_12ch_idx,
+                        window=window,
+                    )
+                    print(absolute_points)
+                    (
+                        p_onset_abs,
+                        p_peak_abs,
+                        p_offset_abs,
+                        q_peak_abs,
+                        r_peak,
+                        s_peak_abs,
+                        t_onset_abs,
+                        t_peak_abs,
+                        t_offset_abs,
+                    ) = absolute_points
+                    (
+                        p_onset,
+                        p_peak,
+                        p_offset,
+                        q_peak,
+                        s_peak,
+                        t_onset,
+                        t_peak,
+                        t_offset,
+                    ) = [
+                        p - start_12ch_idx
+                        for p in [
+                            p_onset_abs,
+                            p_peak_abs,
+                            p_offset_abs,
+                            q_peak_abs,
+                            s_peak_abs,
+                            t_onset_abs,
+                            t_peak_abs,
+                            t_offset_abs,
+                        ]
+                    ]
+                except Exception as e:
+                    print(
+                        f"  > Warning: Could not manually select points. Skipping heartbeat. Error: {e}"
+                    )
+                    skip_heartbeat = True
+            elif args.manual_setting == "2":
+                file_path = os.path.join(args.dataset_output_path, args.output_filepath)
+                pt_filepath = os.path.join(
+                    file_path, f"ponset_toffset_{str(i).zfill(3)}.csv"
+                )
+                if os.path.exists(pt_filepath):
+                    try:
+                        df_pt = pd.read_csv(pt_filepath)
+                        (
+                            p_onset,
+                            p_peak,
+                            p_offset,
+                            q_peak,
+                            r_peak,
+                            s_peak,
+                            t_onset,
+                            t_peak,
+                            t_offset,
+                        ) = (
+                            df_pt["p_onset"][0],
+                            df_pt["p_peak"][0],
+                            df_pt["p_offset"][0],
+                            df_pt["q_peak"][0],
+                            df_pt["r_peak"][0],
+                            df_pt["s_peak"][0],
+                            df_pt["t_onset"][0],
+                            df_pt["t_peak"][0],
+                            df_pt["t_offset"][0],
+                        )
+                    except Exception as e:
+                        skip_heartbeat = True
+                else:
+                    skip_heartbeat = True
+            elif args.manual_setting == "3":
+                try:
+                    prt_eles = PTwave_search3(
+                        ecg_A2=heartbeat_12ch[TARGET_CHANNEL_12CH].to_numpy().T,
+                        header=TARGET_CHANNEL_12CH,
+                        sampling_rate=RATE,
+                        args=args,
+                        time_length=args.time_range,
+                        method=args.peak_method,
+                    )
+                    if prt_eles is not None and len(prt_eles) > 0:
+                        (
+                            p_onset,
+                            t_offset,
+                            p_offset,
+                            t_onset,
+                            r_peak,
+                            p_peak,
+                            q_peak,
+                            s_peak,
+                            t_peak,
+                        ) = prt_eles[0]
+                    else:
+                        skip_heartbeat = True
+                except Exception as e:
+                    skip_heartbeat = True
+            else:
+                skip_heartbeat = True
+
+            if not skip_heartbeat:
+                # 12chと16chそれぞれで正規化処理
+                heartbeat_16ch_normalized = normalize_data(heartbeat_16ch)
+                heartbeat_12ch_normalized = normalize_data(heartbeat_12ch)
+                merge_df = pd.concat(
+                    [heartbeat_16ch_normalized, heartbeat_12ch_normalized], axis=1
+                )
+                data = merge_df.copy()
+                file_path = os.path.join(args.dataset_output_path, args.output_filepath)
+                create_directory_if_not_exists(file_path)
+                for column in data.columns:
+                    data[column] = nk.ecg_clean(
+                        data[column], sampling_rate=RATE, method="neurokit"
+                    )
+                data = normalize_data(data)
+                for j, column in enumerate(data.columns):
+                    # フィルタかける
+                    data[column] = nk.ecg_clean(
+                        data[column], sampling_rate=500, method="neurokit"
+                    )
+                    # pt_extendを実施
+                    # インデックスp_onsetの値を取得
+                    value_at_p_onset = data.iloc[p_onset, j]
+                    # インデックスt_offsetの値を取得
+                    value_at_t_offset = data.iloc[t_offset, j]
+
+                    # p_onsetより前の値を置き換える
+                    data.iloc[:p_onset, j] = value_at_p_onset
+                    # t_offsetより後の値を置き換える
+                    data.iloc[t_offset:, j] = value_at_t_offset
+                    signal = data[column].copy().values
+
+                    # 0. PQ区間のノイズレベルを推定
+                    pq_region = signal[p_offset:q_peak]
+                    print("pq_region", pq_region)
+                    noise_level = (
+                        np.std(np.diff(pq_region)) if len(pq_region) > 1 else 0.1
+                    )
+
+                    # 1. QRS波の開始点と終了点を決定
+                    # 'onset'の呼び出し (変更なし)
+                    qrs_onset = find_qrs_boundary(
+                        "onset", signal, p_offset, q_peak, noise_level
+                    )
+
+                    # 'offset'の呼び出し (r_peakの代わりにs_peakを渡す)
+                    qrs_offset = find_qrs_boundary(
+                        "offset", signal, s_peak, t_onset, noise_level
+                    )
+
+                    # 2. 基線として使用する4つの領域のデータ点を準備
+                    print(p_onset, t_offset)
+                    indices_1 = np.arange(0, p_onset)
+                    values_1 = signal[:p_onset]
+                    # indices_2 = np.arange(p_offset, qrs_onset)
+                    # values_2 = signal[p_offset:qrs_onset]
+                    # indices_3 = np.arange(qrs_offset, t_onset)
+                    # values_3 = signal[qrs_offset:t_onset]
+                    indices_4 = np.arange(t_offset, len(signal))
+                    values_4 = signal[t_offset:]
+
+                    # 2つの領域をすべて結合
+                    baseline_indices = np.concatenate([indices_1, indices_4])
+                    baseline_values = np.concatenate([values_1, values_4])
+                    print(len(signal))
+
+                    # 3. 多項式フィッティングを実行
+                    if len(baseline_indices) > 2:
+                        poly_degree = 6
+                        print("baseline_indices", len(baseline_indices))
+                        print("baseline_values", len(baseline_values))
+                        print("len(poly_degree)", poly_degree)
+                        coeffs = np.polyfit(
+                            baseline_indices, baseline_values, poly_degree
+                        )
+                        x_full = np.arange(len(signal))
+                        baseline = np.polyval(coeffs, x_full)
+                        corrected_signal = signal - baseline
+                    else:
+                        corrected_signal = signal
+
+                    # 4. 結果をデータフレームに格納
+                    data[column] = corrected_signal
+
+                output_csv(
+                    file_name=f"dataset_{str(i).zfill(3)}.csv",
+                    file_path=file_path,
+                    data=data,
+                )
+                output_csv_eles(
+                    file_name=f"ponset_toffset_{str(i).zfill(3)}.csv",
+                    file_path=file_path,
+                    p_onset=p_onset,
+                    t_offset=t_offset,
+                    p_offset=p_offset,
+                    t_onset=t_onset,
+                    r_peak=r_peak,
+                    p_peak=p_peak,
+                    q_peak=q_peak,
+                    s_peak=s_peak,
+                    t_peak=t_peak,
+                )
+    # --- END OF HEARTBEAT PROCESSING LOGIC ---
+    # 移動平均を計算
+    # 処理するCSVファイルの一覧を取得
+    data_paths = sorted(
+        glob(args.dataset_output_path + "/" + args.output_filepath + "/dataset_*.csv")
+    )
+    # pt_array_paths = sorted(
+    #     glob(
+    #         args.dataset_output_path
+    #         + "/"
+    #         + args.output_filepath
+    #         + "/ponset_toffset_*.csv"
+    #     )
+    # )
+    # pt_extend(data_paths, pt_array_paths)
+    moving_ave_path = os.path.join(
+        args.dataset_output_path, args.output_filepath, "moving_ave_datasets"
+    )
+    create_directory_if_not_exists(moving_ave_path)
+    calculate_moving_average(data_paths, moving_ave_path, group_size=5)
+
+    # 15chバリエーション作成
+    create_15ch_variations(args)
+    print("終了")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    # parser.add_argument("--dir_name", type=str, default='goto_0604/goto_0604_normal2')
+
+    parser.add_argument("--name", type=str, default="")
+    parser.add_argument("--date", type=str, default="")
+    parser.add_argument("--peak_method", type=str, default="")
+    parser.add_argument("--pos", type=str, default="")
+    parser.add_argument("--type", type=str, default="")
+    parser.add_argument("--dir_name", type=str, default="")
+    parser.add_argument("--png_path", type=str, default="")
+    parser.add_argument("--output_filepath", type=str, default="")
+    # parser.add_argument("--TARGET_CHANNEL_15ch", type=str, default='ch_1')
+    parser.add_argument("--TARGET_CHANNEL_12CH", type=str, default="")
+    # parser.add_argument("--cut_min_max_range", type=list, default=[0,10])
+    parser.add_argument("--cut_min_max_range", type=list, default="")
+    parser.add_argument("--time_range", type=float)
+    parser.add_argument(
+        "--reverse", type=str, default=""
+    )  # onだと波形逆さまにしてピーク検出。これはシートセンサを逆向きに貼ったとき
+    parser.add_argument("--project_path", type=str, default="")
+    parser.add_argument("--raw_datas_dir", type=str, default="")
+    parser.add_argument("--raw_datas_os", type=str, default="")
+    parser.add_argument("--dataset_made_date", type=str, default="")
+    parser.add_argument("--dataset_output_path", type=str, default="")
+    parser.add_argument("--test_images_path", type=str, default="")
+    parser.add_argument(
+        "--manual_setting",
+        type=str,
+        default="1",
+        help="PQRST detection mode: 1=Manual, 2=File, 3=Auto",
+    )
+    parser.add_argument(
+        "--enable_averaging", type=bool, default=True, help="Enable averaging mode."
+    )
+    parser.add_argument(
+        "--average_beats_num",
+        type=int,
+        default=1,
+        help="Number of heartbeats to average.",
+    )
+    args = parser.parse_args()
+    args.name, args.date = select_name_and_date()
+    args.peak_method = (
+        "cwt"  # neurokitのピーク検出アルゴリズムについてcwtかpeakがある。
+    )
+    args.pos = "center_1"
+    args.type = ""
+    args.dir_name = "{}/{}".format(args.name, args.type)
+    args.png_path = ""
+    args.time_range = 0.8
+    args.output_filepath = "{}_{}_{}s/{}".format(
+        args.name, args.date, str(args.time_range), args.pos
+    )
+    args.TARGET_CHANNEL_12CH = "A2"
+    args.cut_min_max_range = [1.0, 100.0]
+    args.reverse = "on"
+    args.type = "{}_{}_{}".format(args.name, args.date, args.pos)
+    args.dir_name = "{}/{}".format(args.name, args.type)
+    # args.project_path='/home/cs28/share/goto/goto/ecg_project'
+    # args.raw_datas_os=RAW_DATA_DIR
+    # args.processed_datas_os=args.project_path+'/data/processed'
+    # args.processed_datas_os=PROCESSED_DATA_DIR
+    args.dataset_made_date = DATASET_MADE_DATE
+    args.raw_datas_dir = RAW_DATA_DIR + "/takahashi_test/{}".format(args.dir_name)
+    args.dataset_output_path = os.path.join(PROCESSED_DATA_DIR, "for_best_resample")
+    main(args)
